@@ -15,7 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the LLM Reminders integration."""
-    _LOGGER.info("async_setup called for LLM Reminders: module=%s", __file__)
+    _LOGGER.debug("async_setup called for LLM Reminders: module=%s", __file__)
     await async_log_runtime_layout(hass)
     log_hass_component_state(hass, "async_setup")
     try:
@@ -28,16 +28,15 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     hass.data[PROMPT_DATA_KEY] = prompt_catalog
     _LOGGER.info(
-        "LLM Reminders prompt catalog loaded: languages=%s base_length=%d",
+        "LLM Reminders prompt catalog loaded: languages=%s",
         sorted(prompt_catalog.language_additions),
-        len(prompt_catalog.base),
     )
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up LLM Reminders from a config entry."""
-    _LOGGER.info(
+    _LOGGER.debug(
         "async_setup_entry called for LLM Reminders: entry_id=%s "
         "data_keys=%s option_keys=%s",
         entry.entry_id,
@@ -50,7 +49,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     manager = ReminderManager(hass, options)
     try:
         await manager.async_load()
-        _LOGGER.info(
+        _LOGGER.debug(
             "LLM Reminders manager storage loaded: entry_id=%s manager_type=%s",
             entry.entry_id,
             type(manager).__name__,
@@ -64,7 +63,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise
     managers = hass.data.setdefault(DOMAIN, {})
     managers[entry.entry_id] = manager
-    _LOGGER.info(
+    _LOGGER.debug(
         "LLM Reminders manager registered: hass.data[%s] entry_ids=%s "
         "manager_type=%s",
         DOMAIN,
