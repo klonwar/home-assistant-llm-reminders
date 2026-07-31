@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.components import llm
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
@@ -12,10 +12,58 @@ from homeassistant.helpers.llm import LLMContext, ToolInput
 from .const import DOMAIN
 from .manager import ReminderManager
 
+_LOGGER = logging.getLogger(__name__)
+
+try:
+    from homeassistant.components import llm
+except Exception:
+    _LOGGER.exception(
+        "Failed to import the Home Assistant LLM platform for LLM Reminders"
+    )
+    raise
+else:
+    _LOGGER.info("Home Assistant LLM platform imported for LLM Reminders")
+
 
 def _manager(hass: HomeAssistant) -> ReminderManager | None:
-    managers = hass.data.get(DOMAIN, {})
-    return next(iter(managers.values()), None)
+    managers = hass.data.get(DOMAIN)
+    if managers is None:
+        _LOGGER.warning(
+            "LLM Reminders manager lookup failed: hass.data[%s] is missing",
+            DOMAIN,
+        )
+        return None
+
+    if not isinstance(managers, dict):
+        _LOGGER.error(
+            "LLM Reminders manager lookup failed: hass.data[%s] has unexpected type %s",
+            DOMAIN,
+            type(managers).__name__,
+        )
+        return None
+
+    if not managers:
+        _LOGGER.warning(
+            "LLM Reminders manager lookup failed: hass.data[%s] is empty",
+            DOMAIN,
+        )
+        return None
+
+    manager = next(iter(managers.values()), None)
+    if manager is None:
+        _LOGGER.warning(
+            "LLM Reminders manager lookup failed: hass.data[%s] has no manager values; entry_ids=%s",
+            DOMAIN,
+            list(managers),
+        )
+        return None
+
+    _LOGGER.debug(
+        "LLM Reminders manager found: entry_ids=%s manager_type=%s",
+        list(managers),
+        type(manager).__name__,
+    )
+    return manager
 
 
 class CreateReminderTool(llm.Tool):
@@ -120,17 +168,24 @@ def async_get_tools(
     api_id: str,
 ) -> llm.LLMTools | None:
     """Return reminder tools for the selected Home Assistant LLM API."""
-    if _manager(hass) is None:
+    _LOGGER.info("async_get_tools called for LLM Reminders: api_id=%s", api_id)
+    manager = _manager(hass)
+    if manager is None:
+        _LOGGER.warning(
+            "async_get_tools returning None: no LLM Reminders manager for api_id=%s",
+            api_id,
+        )
         return None
 
     timezone = hass.config.time_zone or "Home Assistant timezone"
-    return llm.LLMTools(
-        tools=[
-            CreateReminderTool(),
-            ListRemindersTool(),
-            CancelReminderTool(),
-            UpdateReminderTool(),
-        ],
+    tools = [
+        CreateReminderTool(),
+        ListRemindersTool(),
+        CancelReminderTool(),
+        UpdateReminderTool(),
+    ]
+    result = llm.LLMTools(
+        tools=tools,
         prompt=(
             "Use these tools for one-time spoken reminders. "
             "The user speaks Russian, but tool arguments must be normalized. "
@@ -150,3 +205,9 @@ def async_get_tools(
             "and in Russian."
         ),
     )
+    _LOGGER.info(
+        "async_get_tools returning LLM Reminders tools: api_id=%s tool_names=%s",
+        api_id,
+        [tool.name for tool in tools],
+    )
+    return result
