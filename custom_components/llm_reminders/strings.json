@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "LLM Reminders",
+        "description": "Configure the fallback Assist Satellite used when a request has no device context.",
+        "data": {
+          "default_satellite": "Default Assist Satellite"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "LLM Reminders is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "LLM Reminders options",
+        "data": {
+          "default_satellite": "Default Assist Satellite"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "LLM Reminders",
+        "description": "Настройте основной Assist Satellite, если в запросе нет контекста устройства.",
+        "data": {
+          "default_satellite": "Основной Assist Satellite"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "LLM Reminders уже настроен."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Настройки LLM Reminders",
+        "data": {
+          "default_satellite": "Основной Assist Satellite"
+        }
+      }
+    }
+  }
+}
