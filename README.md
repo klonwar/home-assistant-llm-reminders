@@ -46,6 +46,29 @@ config/
 
 Restart Home Assistant after copying the files.
 
+## Home Assistant version compatibility
+
+This integration uses Home Assistant's LLM platform API:
+
+```text
+custom_components/llm_reminders/llm.py
+```
+
+The required lazy LLM platform loader and `async_get_tools()` integration
+point are available starting with Home Assistant Core **2026.8.0**. Use Core
+2026.8.0 or newer.
+
+Home Assistant Core 2026.7.x includes the older `homeassistant.helpers.llm`
+Assist API, but does not include the `homeassistant.components.llm` platform
+loader. On 2026.7.x the integration can load normally and the native
+`HassStartTimer` tool can still appear, but `llm.py` is never imported and the
+four reminder tools are not added to Assist.
+
+The current [Home Assistant LLM API documentation](https://developers.home-assistant.io/docs/core/llm/)
+describes the newer platform API. After upgrading
+Home Assistant, restart the container; no changes to `configuration.yaml`,
+local processing, or the native timer tools are required.
+
 ## Configuration
 
 Open `Settings → Devices & services → Add integration`, select **LLM
