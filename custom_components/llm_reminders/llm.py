@@ -1,18 +1,28 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
-import voluptuous as vol
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.llm import LLMContext, ToolInput
-
-from .const import DOMAIN
-from .manager import ReminderManager
-
 _LOGGER = logging.getLogger(__name__)
+_MODULE_PATH = Path(__file__).resolve()
+_LOGGER.info("Loading LLM Reminders LLM platform module: file=%s", _MODULE_PATH)
+
+try:
+    import voluptuous as vol
+    from homeassistant.core import HomeAssistant, callback
+    from homeassistant.exceptions import HomeAssistantError
+    from homeassistant.helpers import config_validation as cv
+    from homeassistant.helpers.llm import LLMContext, ToolInput
+
+    from .const import DOMAIN
+    from .manager import ReminderManager
+except Exception:
+    _LOGGER.exception(
+        "LLM Reminders LLM platform module dependency import failed: file=%s",
+        _MODULE_PATH,
+    )
+    raise
 
 try:
     from homeassistant.components import llm
@@ -22,7 +32,48 @@ except Exception:
     )
     raise
 else:
-    _LOGGER.info("Home Assistant LLM platform imported for LLM Reminders")
+    _LOGGER.info(
+        "Home Assistant LLM platform imported for LLM Reminders: "
+        "module=%s llm_module=%s",
+        _MODULE_PATH,
+        getattr(llm, "__file__", None),
+    )
+
+
+def _log_loader_state(hass: HomeAssistant, phase: str) -> None:
+    """Log state of the Home Assistant LLM platform loader."""
+    config = getattr(hass, "config", None)
+    components = getattr(config, "components", None)
+    top_level_components = getattr(config, "top_level_components", None)
+    loader_key = getattr(llm, "DATA_PLATFORMS", "llm_platforms")
+    loader = hass.data.get(loader_key)
+    processed = getattr(loader, "_processed", None)
+    _LOGGER.info(
+        "LLM Reminders LLM loader state: phase=%s loader_key=%s "
+        "loader_type=%s loader_initialized=%s processed_domains=%s "
+        "hass_data_keys=%s config_components=%s top_level_components=%s "
+        "reminder_data_type=%s reminder_entry_ids=%s",
+        phase,
+        loader_key,
+        type(loader).__name__ if loader is not None else None,
+        loader is not None,
+        sorted(str(domain) for domain in processed)
+        if isinstance(processed, dict)
+        else None,
+        sorted(str(key) for key in hass.data),
+        sorted(str(component) for component in components)
+        if components is not None
+        else None,
+        sorted(str(component) for component in top_level_components)
+        if top_level_components is not None
+        else None,
+        type(hass.data.get(DOMAIN)).__name__
+        if DOMAIN in hass.data
+        else None,
+        list(hass.data[DOMAIN])
+        if isinstance(hass.data.get(DOMAIN), dict)
+        else None,
+    )
 
 
 def _manager(hass: HomeAssistant) -> ReminderManager | None:
@@ -168,7 +219,17 @@ def async_get_tools(
     api_id: str,
 ) -> llm.LLMTools | None:
     """Return reminder tools for the selected Home Assistant LLM API."""
-    _LOGGER.info("async_get_tools called for LLM Reminders: api_id=%s", api_id)
+    _LOGGER.info(
+        "async_get_tools called for LLM Reminders: api_id=%s "
+        "context_platform=%s context_assistant=%s context_language=%s "
+        "context_device_id=%s",
+        api_id,
+        getattr(llm_context, "platform", None),
+        getattr(llm_context, "assistant", None),
+        getattr(llm_context, "language", None),
+        getattr(llm_context, "device_id", None),
+    )
+    _log_loader_state(hass, "async_get_tools before manager lookup")
     manager = _manager(hass)
     if manager is None:
         _LOGGER.warning(
@@ -178,36 +239,64 @@ def async_get_tools(
         return None
 
     timezone = hass.config.time_zone or "Home Assistant timezone"
+    _LOGGER.info(
+        "async_get_tools building tools: api_id=%s manager_type=%s timezone=%s",
+        api_id,
+        type(manager).__name__,
+        timezone,
+    )
     tools = [
         CreateReminderTool(),
         ListRemindersTool(),
         CancelReminderTool(),
         UpdateReminderTool(),
     ]
-    result = llm.LLMTools(
-        tools=tools,
-        prompt=(
-            "Use these tools for one-time spoken reminders. "
-            "The user speaks Russian, but tool arguments must be normalized. "
-            f"The Home Assistant timezone is {timezone}. "
-            "create_reminder requires message and an absolute ISO-8601 due_at "
-            "with timezone. Use the nearest future occurrence for ambiguous "
-            "12-hour times. For a phrase such as 'сегодня в 8', interpret "
-            "8 as the nearest future 08:00 or 20:00 during that day; if no "
-            "matching time remains today, ask for clarification. Use 09:00 "
-            "for morning, 13:00 for daytime, and 19:00 for evening unless "
-            "the user specifies another time. If the reminder text or time "
-            "is missing, ask one concise follow-up question. A completed "
-            "tool call is successful; if the tool reports an error, explain "
-            "it briefly instead of claiming success. "
-            "If a cancellation or update matches multiple reminders, ask the "
-            "user to clarify instead of choosing one. Keep responses concise "
-            "and in Russian."
-        ),
-    )
+    try:
+        result = llm.LLMTools(
+            tools=tools,
+            prompt=(
+                "Use these tools for one-time spoken reminders. "
+                "The user speaks Russian, but tool arguments must be normalized. "
+                f"The Home Assistant timezone is {timezone}. "
+                "create_reminder requires message and an absolute ISO-8601 due_at "
+                "with timezone. Use the nearest future occurrence for ambiguous "
+                "12-hour times. For a phrase such as 'сегодня в 8', interpret "
+                "8 as the nearest future 08:00 or 20:00 during that day; if no "
+                "matching time remains today, ask for clarification. Use 09:00 "
+                "for morning, 13:00 for daytime, and 19:00 for evening unless "
+                "the user specifies another time. If the reminder text or time "
+                "is missing, ask one concise follow-up question. A completed "
+                "tool call is successful; if the tool reports an error, explain "
+                "it briefly instead of claiming success. "
+                "If a cancellation or update matches multiple reminders, ask the "
+                "user to clarify instead of choosing one. Keep responses concise "
+                "and in Russian."
+            ),
+        )
+    except Exception:
+        _LOGGER.exception(
+            "async_get_tools failed while constructing LLMTools: api_id=%s "
+            "tool_names=%s",
+            api_id,
+            [tool.name for tool in tools],
+        )
+        raise
     _LOGGER.info(
         "async_get_tools returning LLM Reminders tools: api_id=%s tool_names=%s",
         api_id,
         [tool.name for tool in tools],
     )
     return result
+
+
+_LOGGER.info(
+    "LLM Reminders LLM platform module loaded successfully: file=%s "
+    "available_tools=%s",
+    _MODULE_PATH,
+    [
+        CreateReminderTool.name,
+        ListRemindersTool.name,
+        CancelReminderTool.name,
+        UpdateReminderTool.name,
+    ],
+)
