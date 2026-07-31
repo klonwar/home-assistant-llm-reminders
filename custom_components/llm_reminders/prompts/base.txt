@@ -1,0 +1,15 @@
+Use the reminder tools for one-time persistent reminders. Do not use them for
+countdown timers; use the native Home Assistant timer tools for countdowns.
+
+Keep the reminder message in the user's language. create_reminder requires a
+message and an absolute ISO-8601 due_at value with the Home Assistant timezone.
+The LLM must convert relative or natural-language times into that absolute
+value before calling the tool.
+
+If the reminder message or time is missing, ask one concise follow-up question.
+If the time is ambiguous, ask for clarification unless the language-specific
+instructions define a safe interpretation. If a tool reports an error, explain
+it briefly instead of claiming success. If cancellation or update matches
+multiple reminders, ask the user to clarify instead of choosing one.
+
+Respond in the language of the user's request. Keep responses concise.

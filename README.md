@@ -69,6 +69,21 @@ describes the newer platform API. After upgrading
 Home Assistant, restart the container; no changes to `configuration.yaml`,
 local processing, or the native timer tools are required.
 
+## Language support
+
+The integration supports language-aware LLM instructions. The base instructions
+are stored in `custom_components/llm_reminders/prompts/base.txt`, with optional
+language-specific additions in `prompts/languages/`:
+
+- `en.txt` — English guidance;
+- `ru.txt` — Russian guidance and Russian time expressions.
+
+The matching file is selected from the Assist request language. Regional tags
+such as `en-US` and `ru-RU` use their base language file. Languages without a
+dedicated file use the neutral base instructions and the model is asked to
+respond in the user's language. Adding another language only requires adding a
+new `<language>.txt` file; a code change is not required.
+
 ## Configuration
 
 Open `Settings → Devices & services → Add integration`, select **LLM

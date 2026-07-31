@@ -2,25 +2,30 @@ from __future__ import annotations
 
 import json
 import logging
+from functools import partial
 from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
+from .const import DOMAIN, PROMPT_DATA_KEY
 from .manager import ReminderManager
+from .prompt_loader import PromptCatalog, load_prompt_catalog
 
 _LOGGER = logging.getLogger(__name__)
 _INTEGRATION_DIR = Path(__file__).resolve().parent
 
 
-def _log_runtime_layout() -> None:
+async def _log_runtime_layout(hass: HomeAssistant) -> None:
     """Log the files and version of the package loaded by Home Assistant."""
     manifest_path = _INTEGRATION_DIR / "manifest.json"
     llm_path = _INTEGRATION_DIR / "llm.py"
     version: str | None = None
     try:
-        version = json.loads(manifest_path.read_text(encoding="utf-8")).get("version")
+        manifest_text = await hass.async_add_executor_job(
+            partial(manifest_path.read_text, encoding="utf-8")
+        )
+        version = json.loads(manifest_text).get("version")
     except (OSError, ValueError, TypeError):
         _LOGGER.exception(
             "Unable to read the runtime manifest: path=%s",
@@ -63,8 +68,22 @@ def _log_hass_component_state(hass: HomeAssistant, phase: str) -> None:
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the LLM Reminders integration."""
     _LOGGER.info("async_setup called for LLM Reminders: module=%s", __file__)
-    _log_runtime_layout()
+    await _log_runtime_layout(hass)
     _log_hass_component_state(hass, "async_setup")
+    try:
+        prompt_catalog: PromptCatalog = await hass.async_add_executor_job(
+            load_prompt_catalog
+        )
+    except (OSError, ValueError):
+        _LOGGER.exception("Unable to load the LLM Reminders prompt catalog")
+        return False
+
+    hass.data[PROMPT_DATA_KEY] = prompt_catalog
+    _LOGGER.info(
+        "LLM Reminders prompt catalog loaded: languages=%s base_length=%d",
+        sorted(prompt_catalog.language_additions),
+        len(prompt_catalog.base),
+    )
     return True
 
 
@@ -77,7 +96,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         sorted(entry.data),
         sorted(entry.options),
     )
-    _log_runtime_layout()
+    await _log_runtime_layout(hass)
     _log_hass_component_state(hass, "async_setup_entry before manager")
     options = {**entry.data, **entry.options}
     manager = ReminderManager(hass, options)

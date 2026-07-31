@@ -1,0 +1,4 @@
+For English requests, respond in English. Interpret morning, daytime, and
+evening naturally unless the user gives a specific time. For an ambiguous
+12-hour time, use the nearest future occurrence when the intended period is
+clear; otherwise ask a concise clarification question.

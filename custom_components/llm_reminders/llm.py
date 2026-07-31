@@ -15,8 +15,9 @@ try:
     from homeassistant.helpers import config_validation as cv
     from homeassistant.helpers.llm import LLMContext, ToolInput
 
-    from .const import DOMAIN
+    from .const import DOMAIN, PROMPT_DATA_KEY
     from .manager import ReminderManager
+    from .prompt_loader import build_prompt
 except Exception:
     _LOGGER.exception(
         "LLM Reminders LLM platform module dependency import failed: file=%s",
@@ -239,6 +240,22 @@ def async_get_tools(
         return None
 
     timezone = hass.config.time_zone or "Home Assistant timezone"
+    prompt_catalog = hass.data.get(PROMPT_DATA_KEY)
+    if prompt_catalog is None:
+        _LOGGER.error(
+            "LLM Reminders prompt catalog is not loaded; returning tools without "
+            "the integration prompt: api_id=%s",
+            api_id,
+        )
+        prompt = None
+    else:
+        prompt = build_prompt(prompt_catalog, llm_context.language)
+        _LOGGER.info(
+            "LLM Reminders prompt selected: api_id=%s language=%s prompt_length=%d",
+            api_id,
+            llm_context.language,
+            len(prompt),
+        )
     _LOGGER.info(
         "async_get_tools building tools: api_id=%s manager_type=%s timezone=%s",
         api_id,
@@ -254,24 +271,7 @@ def async_get_tools(
     try:
         result = llm.LLMTools(
             tools=tools,
-            prompt=(
-                "Use these tools for one-time spoken reminders. "
-                "The user speaks Russian, but tool arguments must be normalized. "
-                f"The Home Assistant timezone is {timezone}. "
-                "create_reminder requires message and an absolute ISO-8601 due_at "
-                "with timezone. Use the nearest future occurrence for ambiguous "
-                "12-hour times. For a phrase such as 'сегодня в 8', interpret "
-                "8 as the nearest future 08:00 or 20:00 during that day; if no "
-                "matching time remains today, ask for clarification. Use 09:00 "
-                "for morning, 13:00 for daytime, and 19:00 for evening unless "
-                "the user specifies another time. If the reminder text or time "
-                "is missing, ask one concise follow-up question. A completed "
-                "tool call is successful; if the tool reports an error, explain "
-                "it briefly instead of claiming success. "
-                "If a cancellation or update matches multiple reminders, ask the "
-                "user to clarify instead of choosing one. Keep responses concise "
-                "and in Russian."
-            ),
+            prompt=prompt,
         )
     except Exception:
         _LOGGER.exception(
