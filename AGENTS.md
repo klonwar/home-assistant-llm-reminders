@@ -48,6 +48,14 @@ impact, include test results, and update `manifest.json` when publishing a
 new HACS version. Do not include Home Assistant state, secrets, tokens, or
 instance-specific configuration.
 
+## Versioning
+
+Every change to the integration under `custom_components/llm_reminders/`
+must increment the patch version in `manifest.json` (for example, `0.1.3` to
+`0.1.4`). Update tests that assert the version and verify the final version
+before handing off the change. Documentation-only changes outside the
+integration do not require a version bump.
+
 ## Compatibility and Configuration
 
 The LLM platform API used by `llm.py` requires Home Assistant Core 2026.8.0 or
