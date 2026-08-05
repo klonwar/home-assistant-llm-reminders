@@ -59,7 +59,9 @@ started the request when Home Assistant exposes its device context.
   most dozens of pending reminders and no multi-process coordination need.
 - Home Assistant Core 2026.8.0 or newer remains the compatibility target.
 - Existing retry timing and at-least-once delivery semantics remain unchanged.
-- Any executable integration change increments the manifest patch version.
+- At the time of this historical audit, executable integration changes were
+  expected to increment the manifest patch version manually. The later
+  Release Please policy supersedes that process for published versions.
 
 ### Decision log
 
@@ -96,8 +98,9 @@ tool schemas, satellite resolution, and retry interval remain unchanged.
 Focused tests will capture due-time and retry callbacks, verify Home Assistant
 callback metadata, invoke each callback, and assert that delivery is enqueued
 without an unawaited coroutine. Tests will also preserve delivery, retry,
-cancellation, unload, and diagnostic logging expectations. The manifest patch
-version and its package-layout assertion will be updated. Validation consists
+cancellation, unload, and diagnostic logging expectations. The historical
+change updated the manifest patch version and its package-layout assertion;
+current published versions are managed by Release Please. Validation consists
 of `python -m pytest tests` and
 `python -m compileall -q custom_components\\llm_reminders`, followed by the
 required independent implementation review.
@@ -169,3 +172,85 @@ Regression coverage will verify aware-offset preservation, naive localization,
 the prompt's offset requirement. Deterministic validation remains
 `python -m pytest tests` and
 `python -m compileall -q custom_components\\llm_reminders`.
+
+## HACS validation and Release Please automation (2026-08-05)
+
+### Understanding summary
+
+- Prepare this Home Assistant integration repository for HACS publishing
+  recommendations.
+- Add `.github/workflows/validate.yml` with the official HACS Action for the
+  `integration` category and the official Hassfest action.
+- Run validation on pushes, pull requests, a daily schedule, and manual
+  dispatch.
+- Add a separate Release Please workflow triggered by pushes to `main`.
+- Use the standard Release PR lifecycle: Release Please opens or updates a PR;
+  merging it creates a GitHub Release, a `vX.Y.Z` tag, and `CHANGELOG.md`.
+- Keep `custom_components/llm_reminders/manifest.json` synchronized from the
+  current `0.1.8` version through the Release PR.
+- Store the fine-grained PAT in the repository Actions secret
+  `RELEASE_PLEASE_TOKEN`; contributors use Conventional Commits.
+
+### Assumptions and non-goals
+
+- `main` is the default branch and Release PRs are merged manually.
+- HACS default-repository submission is a later process, not part of this
+  change.
+- Integration runtime behavior, dependencies, and public APIs remain
+  unchanged.
+- HACS and Hassfest action references follow their official examples:
+  `hacs/action@main` and `home-assistant/actions/hassfest@master`.
+- The PAT is restricted to this repository with `contents`, `issues`, and
+  `pull requests` write permissions and an explicit expiration.
+- Risks accepted and documented: PAT rotation is required; the first Release
+  PR may include accumulated Conventional Commits; official mutable action
+  refs require ongoing upstream trust.
+
+### Decision log
+
+1. Use two independent workflows rather than combining validation and release
+   permissions in one workflow.
+2. Run both HACS validation and Hassfest because HACS recommends both for
+   integration repositories.
+3. Use Release Please's manifest-driven configuration for the single root
+   package (`"."`) and omit a component prefix from tags.
+4. Track the initial version in `.release-please-manifest.json` as `0.1.8`.
+5. Configure a JSON `extra-files` updater for
+   `custom_components/llm_reminders/manifest.json` at `$.version`.
+6. Let Release Please own published version bumps; ordinary feature/fix PRs
+   must not manually change the manifest version.
+7. Replace the hard-coded version assertion in
+   `tests/test_package_structure.py` with a SemVer-format assertion.
+8. Use a fine-grained `RELEASE_PLEASE_TOKEN` so Release PRs trigger HACS and
+   Hassfest workflows; serialize Release Please runs with a concurrency group.
+
+### Final design
+
+`validate.yml` will be read-only. It will trigger on `push`, `pull_request`,
+the official midnight schedule, and `workflow_dispatch`. Its HACS job will use
+`hacs/action@main` with `category: integration`; its Hassfest job will check
+out the repository and use `home-assistant/actions/hassfest@master`. Workflow
+permissions default to `{}`; only the Hassfest job receives `contents: read`.
+
+`release-please.yml` will trigger only on pushes to `main`, use
+`googleapis/release-please-action@v4`, pass `secrets.RELEASE_PLEASE_TOKEN`, and
+declare `contents: write`, `issues: write`, and `pull-requests: write`. A
+single concurrency group prevents overlapping Release PR updates. The
+workflow will not execute integration code or publish external packages.
+
+`release-please-config.json` will define one root package with the simple
+release strategy, root `CHANGELOG.md`, and the JSON `extra-files` updater.
+`.release-please-manifest.json` will contain `{ ".": "0.1.8" }`. The action
+will run in manifest mode, create ordinary `v<version>` tags, and generate the
+GitHub Release when the Release PR is merged.
+
+`AGENTS.md` will state that Release Please is the source of published version
+bumps. The package-layout test will validate required manifest keys and a
+SemVer version without assuming a particular release number. README will add
+short maintainer guidance for Conventional Commits, Release PR review, and
+PAT rotation.
+
+Verification consists of `python -m pytest tests`,
+`python -m compileall -q custom_components\\llm_reminders`, JSON parsing for
+the Release Please files, and a GitHub acceptance check covering both
+validation jobs, Release PR updates, and the resulting HACS-visible release.

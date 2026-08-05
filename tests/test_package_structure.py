@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION_DIR = ROOT / "custom_components" / "llm_reminders"
+SEMVER_PATTERN = re.compile(
+    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
+    r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
 
 
 def test_hacs_package_contains_llm_platform_at_integration_root() -> None:
@@ -21,4 +27,26 @@ def test_hacs_package_contains_llm_platform_at_integration_root() -> None:
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["domain"] == "llm_reminders"
-    assert manifest["version"] == "0.1.8"
+    assert isinstance(manifest["version"], str)
+    assert SEMVER_PATTERN.fullmatch(manifest["version"])
+
+
+def test_release_please_manifest_tracks_integration_version() -> None:
+    """Keep Release Please's bootstrap version aligned with the integration."""
+    integration_manifest = json.loads(
+        (INTEGRATION_DIR / "manifest.json").read_text(encoding="utf-8")
+    )
+    release_manifest = json.loads(
+        (ROOT / ".release-please-manifest.json").read_text(encoding="utf-8")
+    )
+    release_config = json.loads(
+        (ROOT / "release-please-config.json").read_text(encoding="utf-8")
+    )
+
+    assert release_manifest["."] == integration_manifest["version"]
+    package_config = release_config["packages"]["."]
+    assert package_config["changelog-path"] == "CHANGELOG.md"
+    assert {
+        extra_file["path"]: extra_file["jsonpath"]
+        for extra_file in package_config["extra-files"]
+    } == {"custom_components/llm_reminders/manifest.json": "$.version"}

@@ -44,17 +44,19 @@ validation behavior. The full suite must pass before submission.
 Use short imperative prefixes consistent with the history, such as `feat:`,
 `fix:`, and `docs:` (for example, `feat: add multilingual reminder prompts`).
 Pull requests should describe the behavior change, explain compatibility
-impact, include test results, and update `manifest.json` when publishing a
-new HACS version. Do not include Home Assistant state, secrets, tokens, or
-instance-specific configuration.
+impact, include test results, and let Release Please update the integration
+version and changelog in the release PR. Do not include Home Assistant state,
+secrets, tokens, or instance-specific configuration.
 
 ## Versioning
 
-Every change to the integration under `custom_components/llm_reminders/`
-must increment the patch version in `manifest.json` (for example, `0.1.3` to
-`0.1.4`). Update tests that assert the version and verify the final version
-before handing off the change. Documentation-only changes outside the
-integration do not require a version bump.
+Release Please is the source of truth for published versions. Ordinary
+feature and fix pull requests must not manually bump the version in
+`custom_components/llm_reminders/manifest.json`; Release Please updates it in
+the Release PR together with `CHANGELOG.md`. Keep the manifest version valid
+SemVer and verify that it matches `.release-please-manifest.json` during local
+checks. Documentation-only changes outside the integration do not require a
+release.
 
 ## Compatibility and Configuration
 

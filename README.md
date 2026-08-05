@@ -180,3 +180,16 @@ python -m pytest tests
 ```
 
 No secrets or Home Assistant instance exports belong in this repository.
+
+### Release automation
+
+Commits merged into `main` are processed by Release Please. Use Conventional
+Commit prefixes such as `fix:` for patch releases, `feat:` for minor releases,
+and a `!` suffix for breaking changes. Release Please opens or updates a
+Release PR, updates `manifest.json` and `CHANGELOG.md`, and publishes the
+GitHub Release after that PR is merged.
+
+Do not edit the integration version manually in ordinary feature or fix PRs.
+Review the HACS and Hassfest checks before merging a Release PR. The release
+workflow uses the repository secret `RELEASE_PLEASE_TOKEN`; rotate that
+fine-grained token before it expires.
