@@ -50,28 +50,6 @@ async def async_log_runtime_layout(hass: HomeAssistant) -> None:
     )
 
 
-def log_hass_component_state(hass: HomeAssistant, phase: str) -> None:
-    """Log Home Assistant component state relevant to lazy platform loading."""
-    if not _LOGGER.isEnabledFor(logging.DEBUG):
-        return
-
-    config = getattr(hass, "config", None)
-    components = getattr(config, "components", None)
-    top_level_components = getattr(config, "top_level_components", None)
-    _LOGGER.debug(
-        "LLM Reminders HA component state: phase=%s hass_data_keys=%s "
-        "config_components=%s top_level_components=%s",
-        phase,
-        sorted(str(key) for key in hass.data),
-        sorted(str(component) for component in components)
-        if components is not None
-        else None,
-        sorted(str(component) for component in top_level_components)
-        if top_level_components is not None
-        else None,
-    )
-
-
 def log_loader_state(
     hass: HomeAssistant,
     phase: str,

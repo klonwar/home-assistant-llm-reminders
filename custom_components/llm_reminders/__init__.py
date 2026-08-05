@@ -6,7 +6,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, PROMPT_DATA_KEY
-from .llm_diagnostics import async_log_runtime_layout, log_hass_component_state
+from .llm_diagnostics import async_log_runtime_layout
 from .manager import ReminderManager
 from .prompt_loader import PromptCatalog, load_prompt_catalog
 
@@ -17,7 +17,6 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the LLM Reminders integration."""
     _LOGGER.debug("async_setup called for LLM Reminders: module=%s", __file__)
     await async_log_runtime_layout(hass)
-    log_hass_component_state(hass, "async_setup")
     try:
         prompt_catalog: PromptCatalog = await hass.async_add_executor_job(
             load_prompt_catalog
@@ -44,7 +43,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         sorted(entry.options),
     )
     await async_log_runtime_layout(hass)
-    log_hass_component_state(hass, "async_setup_entry before manager")
     options = {**entry.data, **entry.options}
     manager = ReminderManager(hass, options)
     try:
@@ -70,7 +68,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         list(managers),
         type(manager).__name__,
     )
-    log_hass_component_state(hass, "async_setup_entry after manager")
     return True
 
 
@@ -92,5 +89,4 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "LLM Reminders manager unloaded: entry_id=%s",
         entry.entry_id,
     )
-    log_hass_component_state(hass, "async_unload_entry after manager")
     return True
