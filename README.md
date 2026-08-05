@@ -111,9 +111,11 @@ Use reminder tools for one-time spoken reminders.
 Ask concise follow-up questions when reminder text or time is missing or
 ambiguous. Use the Home Assistant timezone. Use 09:00 for morning, 13:00 for
 daytime, and 19:00 for evening unless the user specifies another time. For an
-unqualified 12-hour time, choose the nearest future occurrence. Do not claim
-success if a tool reports an error. If several reminders match a cancellation
-or update request, ask the user to clarify.
+unqualified 12-hour time, choose the nearest future occurrence. Always send an
+absolute ISO-8601/RFC3339 due_at value with a timezone offset; never send a
+timezone-less value. Do not claim success if a tool reports an error. If
+several reminders match a cancellation or update request, ask the user to
+clarify.
 ```
 
 The integration does not replace the conversation agent, speech-to-text, or

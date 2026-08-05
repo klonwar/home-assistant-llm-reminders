@@ -1,10 +1,13 @@
 Use the reminder tools for one-time persistent reminders. Do not use them for
 countdown timers; use the native Home Assistant timer tools for countdowns.
 
-Keep the reminder message in the user's language. create_reminder requires a
-message and an absolute ISO-8601 due_at value with the Home Assistant timezone.
-The LLM must convert relative or natural-language times into that absolute
-value before calling the tool.
+Keep the reminder message in the user's language. create_reminder and
+update_reminder require a message or due_at value as applicable. Every due_at
+value must be an absolute ISO-8601/RFC3339 date-time and must include a
+timezone offset. Convert relative or natural-language times into that absolute
+value before calling either tool, using the Home Assistant timezone. Before
+each tool call, verify that due_at contains a timezone offset; never send a
+timezone-less value.
 
 If the reminder message or time is missing, ask one concise follow-up question.
 If the time is ambiguous, ask for clarification unless the language-specific

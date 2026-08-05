@@ -57,6 +57,7 @@ def _install_homeassistant_stubs() -> None:
     event.async_track_point_in_time = lambda *_args, **_kwargs: None
     dt.now = lambda: datetime.now(timezone.utc)
     dt.as_local = lambda value: value.astimezone()
+    dt.get_time_zone = lambda _name: timezone(timedelta(hours=3))
 
     helpers.entity_registry = entity_registry
     helpers.event = event
@@ -113,6 +114,7 @@ class _FakeServices:
 class _FakeHass:
     def __init__(self, satellite_state: str = "idle") -> None:
         self.async_tasks: list[Any] = []
+        self.config = types.SimpleNamespace(time_zone="Europe/Moscow")
         self.states = types.SimpleNamespace(
             get=lambda _entity_id: _FakeState(satellite_state)
         )
@@ -213,6 +215,41 @@ def test_delivery_retries_when_satellite_is_busy(
     assert retries == [reminder["id"]]
     assert reminder["id"] in manager._reminders
     assert not hass.services.calls
+
+
+def test_create_localizes_naive_due_at() -> None:
+    hass = _FakeHass()
+    manager = manager_module.ReminderManager(
+        hass,
+        {manager_module.CONF_DEFAULT_SATELLITE: "assist_satellite.kitchen"},
+    )
+
+    asyncio.run(
+        manager.async_create(
+            message="buy bread",
+            due_at="2099-08-01T19:00:00",
+            device_id=None,
+        )
+    )
+
+    reminder = next(iter(manager._reminders.values()))
+    assert reminder["due_at"].endswith("+03:00")
+
+
+def test_update_preserves_explicit_due_at_offset() -> None:
+    hass = _FakeHass()
+    manager = manager_module.ReminderManager(hass, {})
+    reminder = _reminder()
+    manager._reminders[reminder["id"]] = reminder
+
+    asyncio.run(
+        manager.async_update(
+            reminder_id=reminder["id"],
+            due_at="2099-08-01T19:00:00+05:00",
+        )
+    )
+
+    assert manager._reminders[reminder["id"]]["due_at"].endswith("+05:00")
 
 
 async def _fake_delivery(reminder_id: str) -> None:

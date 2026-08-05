@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import importlib.util
 from pathlib import Path
 
@@ -34,6 +34,36 @@ def test_parse_iso_datetime_accepts_zulu_suffix() -> None:
 def test_parse_iso_datetime_rejects_naive_value() -> None:
     with pytest.raises(ValueError):
         parse_iso_datetime("2026-08-01T19:00:00")
+
+
+def test_parse_iso_datetime_rejects_date_only_value() -> None:
+    with pytest.raises(ValueError):
+        parse_iso_datetime(
+            "2026-08-01",
+            local_timezone=timezone(timedelta(hours=3)),
+        )
+
+
+def test_parse_iso_datetime_localizes_naive_value() -> None:
+    local_timezone = timezone(timedelta(hours=3))
+
+    value = parse_iso_datetime(
+        "2026-08-01T19:00:00",
+        local_timezone=local_timezone,
+    )
+
+    assert value == datetime(2026, 8, 1, 19, tzinfo=local_timezone)
+
+
+def test_parse_iso_datetime_preserves_explicit_offset() -> None:
+    local_timezone = timezone(timedelta(hours=3))
+
+    value = parse_iso_datetime(
+        "2026-08-01T19:00:00+05:00",
+        local_timezone=local_timezone,
+    )
+
+    assert value.utcoffset() == timedelta(hours=5)
 
 
 def test_normalize_message_collapses_whitespace() -> None:

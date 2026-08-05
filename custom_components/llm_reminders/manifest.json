@@ -1,7 +1,7 @@
 {
   "domain": "llm_reminders",
   "name": "LLM Reminders",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "documentation": "https://github.com/klonwar/home-assistant-llm-reminders",
   "issue_tracker": "https://github.com/klonwar/home-assistant-llm-reminders/issues",
   "codeowners": [],

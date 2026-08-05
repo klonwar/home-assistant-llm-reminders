@@ -44,3 +44,11 @@ def test_build_prompt_selects_language_addition() -> None:
     assert "Пользователь говорит по-русски" in russian
     assert "Пользователь говорит по-русски" not in english
     assert german == catalog.base
+
+
+def test_prompt_requires_timezone_offset_for_due_at() -> None:
+    catalog = _MODULE.load_prompt_catalog(PROMPTS_PATH)
+
+    assert "must include a" in catalog.base
+    assert "timezone offset" in catalog.base
+    assert "часовым поясом" in catalog.language_additions["ru"]

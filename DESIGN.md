@@ -100,3 +100,70 @@ version and its package-layout assertion will be updated. Validation consists
 of `python -m pytest tests` and
 `python -m compileall -q custom_components\\llm_reminders`, followed by the
 required independent implementation review.
+
+## Timezone-aware LLM due_at handling (2026-08-05)
+
+### Understanding summary
+
+- The LLM currently retries because it can send a valid-looking ISO timestamp
+  without a timezone offset, while the integration deliberately rejects naive
+  datetimes.
+- The desired outcome is a successful first tool call for valid reminder times,
+  without changing the meaning of an explicitly timezone-aware value.
+- The prompt and the server-side validation must both enforce the timestamp
+  contract for `create_reminder` and `update_reminder`.
+- A value without an offset is interpreted as local time in Home Assistant's
+  configured timezone, including daylight-saving rules where applicable.
+- A value with an explicit offset keeps that offset and its represented instant;
+  it is not reinterpreted as a Home Assistant wall-clock time.
+- Native timers, public tool names, persistence format, satellite routing, and
+  delivery retry behavior remain outside this change.
+
+### Assumptions
+
+- The Home Assistant compatibility target remains Core 2026.8.0 or newer.
+- Invalid or impossible date strings remain validation errors.
+- Dates in the past continue to be rejected.
+- Existing stored records are expected to contain offsets and remain parsed in
+  strict mode.
+- A typical installation has at most dozens of pending reminders; timezone
+  normalization must be negligible compared with an LLM request.
+- No reminder text, credentials, or instance-specific data is added to logs.
+
+### Decision log
+
+1. Use a two-layer contract: prompt requirements plus defensive server-side
+   normalization. This avoids an unnecessary retry when the model omits an
+   offset while still guiding future calls to the correct format.
+2. Apply identical handling to creation and update operations because both
+   accept `due_at` and both schedule a future reminder.
+3. Require the prompt to request absolute ISO-8601/RFC3339 values with an
+   offset, but do not hardcode a numeric offset or include examples.
+4. For a naive value, attach `hass.config.time_zone`; for an aware value,
+   preserve the explicitly supplied offset and instant.
+5. Reject nonexistent or ambiguous local times caused by timezone transitions
+   instead of silently shifting the reminder; ask the user for clarification.
+6. Keep strict parsing for loaded records and all internal scheduling paths.
+
+### Final design
+
+The base prompt will state that `due_at` is mandatory, absolute, ISO-8601/
+RFC3339, and must include a timezone offset. Relative or natural-language
+times are resolved before the tool call using Home Assistant's timezone. The
+same requirement is stated for both create and update; the prompt contains no
+fixed offset or illustrative payload. Missing or ambiguous user input still
+requires a concise clarification question.
+
+The shared datetime parser will support an explicit local-timezone context for
+the two LLM write paths. It will keep an existing offset unchanged, normalize a
+naive value with the configured Home Assistant timezone, and return a
+timezone-aware datetime for future-time validation, storage, and scheduling.
+Already persisted reminders continue through strict parsing. Invalid,
+nonexistent, or ambiguous values raise a concise `HomeAssistantError` rather
+than being silently shifted.
+
+Regression coverage will verify aware-offset preservation, naive localization,
+`Z` handling, create/update parity, invalid and past dates, strict loading, and
+the prompt's offset requirement. Deterministic validation remains
+`python -m pytest tests` and
+`python -m compileall -q custom_components\\llm_reminders`.

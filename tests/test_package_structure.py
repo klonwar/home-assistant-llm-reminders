@@ -21,4 +21,4 @@ def test_hacs_package_contains_llm_platform_at_integration_root() -> None:
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["domain"] == "llm_reminders"
-    assert manifest["version"] == "0.1.4"
+    assert manifest["version"] == "0.1.5"

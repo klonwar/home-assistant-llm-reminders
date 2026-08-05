@@ -87,7 +87,10 @@ class ReminderManager:
     ) -> dict[str, Any]:
         try:
             clean_message = normalize_message(message, MAX_MESSAGE_LENGTH)
-            due = parse_iso_datetime(due_at)
+            due = parse_iso_datetime(
+                due_at,
+                local_timezone=dt_util.get_time_zone(self.hass.config.time_zone),
+            )
         except ValueError as err:
             raise HomeAssistantError(str(err)) from err
 
@@ -172,7 +175,10 @@ class ReminderManager:
 
         if due_at is not None:
             try:
-                due = parse_iso_datetime(due_at)
+                due = parse_iso_datetime(
+                    due_at,
+                    local_timezone=dt_util.get_time_zone(self.hass.config.time_zone),
+                )
             except ValueError as err:
                 raise HomeAssistantError(str(err)) from err
             if due <= dt_util.now():
