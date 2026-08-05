@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 import logging
 from typing import Any
@@ -230,9 +231,7 @@ class ReminderManager:
 
         self._scheduled[reminder_id] = async_track_point_in_time(
             self.hass,
-            lambda _now, reminder_id=reminder_id: self.hass.async_create_task(
-                self._async_deliver(reminder_id)
-            ),
+            self._delivery_callback(reminder_id),
             due,
         )
 
@@ -242,10 +241,17 @@ class ReminderManager:
         self._retry_scheduled[reminder_id] = async_call_later(
             self.hass,
             RETRY_SECONDS,
-            lambda _now, reminder_id=reminder_id: self.hass.async_create_task(
-                self._async_deliver(reminder_id)
-            ),
+            self._delivery_callback(reminder_id),
         )
+
+    def _delivery_callback(self, reminder_id: str) -> Callable[[datetime], None]:
+        """Return an event-loop callback that starts reminder delivery."""
+
+        @callback
+        def _handle_delivery(_now: datetime) -> None:
+            self.hass.async_create_task(self._async_deliver(reminder_id))
+
+        return _handle_delivery
 
     async def _async_deliver(self, reminder_id: str) -> None:
         if reminder_id in self._in_flight:
