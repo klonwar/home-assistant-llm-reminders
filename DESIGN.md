@@ -48,8 +48,8 @@ started the request when Home Assistant exposes its device context.
   delivery, retry, cancellation, update, and restart behavior.
 - Require both runtime-safe delivery/retry behavior and regression coverage;
   removing the warning alone is not sufficient.
-- Include diagnostic logging in the audit and keep reminder text, credentials,
-  and other sensitive content out of logs.
+- Include diagnostic logging in the audit; credentials and instance-specific
+  secrets must remain out of logs.
 - Keep native Home Assistant timer tools, persistent idempotency, recurring
   reminders, and unrelated refactors out of scope.
 
@@ -67,8 +67,9 @@ started the request when Home Assistant exposes its device context.
    `manager.py`.
 2. Preserve existing reliability guarantees: restart persistence, retry for a
    busy or unavailable satellite, cancellation, and removal after success.
-3. Include a diagnostic logging/redaction review without adding reminder text
-   to logs.
+3. Include a diagnostic logging/redaction review. Reminder text and `due_at`
+   are included in operation logs by explicit user request; credentials and
+   instance-specific secrets remain excluded.
 4. Use Home Assistant's explicit `@callback` contract for timer callbacks.
 5. Add focused manager tests for due and retry callback scheduling and retain
    the repository's full deterministic checks.
@@ -128,7 +129,8 @@ required independent implementation review.
   strict mode.
 - A typical installation has at most dozens of pending reminders; timezone
   normalization must be negligible compared with an LLM request.
-- No reminder text, credentials, or instance-specific data is added to logs.
+- Operation logs include reminder text and `due_at` by explicit user request;
+  credentials and instance-specific secrets are not logged.
 
 ### Decision log
 

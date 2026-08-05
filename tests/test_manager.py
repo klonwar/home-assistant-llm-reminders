@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 import importlib
+import logging
 from pathlib import Path
 import sys
 import types
@@ -198,6 +199,7 @@ def test_delivery_announces_and_removes_reminder() -> None:
     assert reminder["id"] not in manager._reminders
     assert len(hass.services.calls) == 1
     assert hass.services.calls[0][0:2] == ("assist_satellite", "announce")
+    assert hass.services.calls[0][2]["message"] == "Напоминание: buy bread."
 
 
 def test_delivery_retries_when_satellite_is_busy(
@@ -217,12 +219,13 @@ def test_delivery_retries_when_satellite_is_busy(
     assert not hass.services.calls
 
 
-def test_create_localizes_naive_due_at() -> None:
+def test_create_localizes_naive_due_at(caplog: pytest.LogCaptureFixture) -> None:
     hass = _FakeHass()
     manager = manager_module.ReminderManager(
         hass,
         {manager_module.CONF_DEFAULT_SATELLITE: "assist_satellite.kitchen"},
     )
+    caplog.set_level(logging.INFO, logger=manager_module.__name__)
 
     asyncio.run(
         manager.async_create(
@@ -234,6 +237,11 @@ def test_create_localizes_naive_due_at() -> None:
 
     reminder = next(iter(manager._reminders.values()))
     assert reminder["due_at"].endswith("+03:00")
+    assert "async_create called" in caplog.text
+    assert "message='buy bread'" in caplog.text
+    assert "due_at='2099-08-01T19:00:00'" in caplog.text
+    assert "async_create result" in caplog.text
+    assert "due_at=2099-08-01T19:00:00+03:00" in caplog.text
 
 
 def test_update_preserves_explicit_due_at_offset() -> None:

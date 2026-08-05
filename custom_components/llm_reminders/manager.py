@@ -27,6 +27,18 @@ _LOGGER = logging.getLogger(__name__)
 _UNAVAILABLE_STATES = {"unknown", "unavailable"}
 
 
+def _log_reminder(event: str, reminder: dict[str, Any]) -> None:
+    """Log reminder details for operation and delivery diagnostics."""
+    _LOGGER.info(
+        "LLM Reminders %s: reminder_id=%s message=%r due_at=%s satellite=%s",
+        event,
+        reminder["id"],
+        reminder["message"],
+        reminder["due_at"],
+        reminder["satellite"],
+    )
+
+
 class ReminderManager:
     """Persistent reminder storage and Assist Satellite delivery."""
 
@@ -85,6 +97,12 @@ class ReminderManager:
         due_at: str,
         device_id: str | None,
     ) -> dict[str, Any]:
+        _LOGGER.info(
+            "LLM Reminders async_create called: message=%r due_at=%r device_id=%s",
+            message,
+            due_at,
+            device_id,
+        )
         try:
             clean_message = normalize_message(message, MAX_MESSAGE_LENGTH)
             due = parse_iso_datetime(
@@ -92,13 +110,31 @@ class ReminderManager:
                 local_timezone=dt_util.get_time_zone(self.hass.config.time_zone),
             )
         except ValueError as err:
+            _LOGGER.warning(
+                "LLM Reminders async_create rejected: message=%r due_at=%r error=%s",
+                message,
+                due_at,
+                err,
+            )
             raise HomeAssistantError(str(err)) from err
 
         if due <= dt_util.now():
+            _LOGGER.warning(
+                "LLM Reminders async_create rejected: message=%r due_at=%s "
+                "error=The reminder time must be in the future",
+                clean_message,
+                due.isoformat(),
+            )
             raise HomeAssistantError("The reminder time must be in the future.")
 
         satellite = self._resolve_satellite(device_id)
         if satellite is None:
+            _LOGGER.warning(
+                "LLM Reminders async_create rejected: message=%r due_at=%s "
+                "error=No Assist Satellite is configured",
+                clean_message,
+                due.isoformat(),
+            )
             raise HomeAssistantError(
                 "No Assist Satellite is configured for this request."
             )
@@ -115,9 +151,11 @@ class ReminderManager:
         await self._async_save()
         self._schedule(reminder)
 
+        _log_reminder("async_create result", reminder)
         return {"reminder": reminder}
 
     def list_reminders(self, query: str | None = None) -> dict[str, Any]:
+        _LOGGER.info("LLM Reminders list_reminders called: query=%r", query)
         clean_query = (query or "").strip().casefold()
         reminders = [
             reminder
@@ -126,6 +164,13 @@ class ReminderManager:
             or clean_query in reminder["message"].casefold()
         ]
         reminders.sort(key=lambda item: item["due_at"])
+        _LOGGER.info(
+            "LLM Reminders list_reminders result: query=%r count=%d",
+            query,
+            len(reminders),
+        )
+        for reminder in reminders:
+            _log_reminder("list_reminders item", reminder)
         return {"reminders": reminders}
 
     async def async_cancel(
@@ -133,10 +178,28 @@ class ReminderManager:
         reminder_id: str | None = None,
         query: str | None = None,
     ) -> dict[str, Any]:
+        _LOGGER.info(
+            "LLM Reminders async_cancel called: reminder_id=%r query=%r",
+            reminder_id,
+            query,
+        )
         matches = self._find_matches(reminder_id, query)
         if not matches:
+            _LOGGER.warning(
+                "LLM Reminders async_cancel rejected: reminder_id=%r query=%r "
+                "error=No matching reminder was found",
+                reminder_id,
+                query,
+            )
             raise HomeAssistantError("No matching reminder was found.")
         if len(matches) > 1:
+            _LOGGER.warning(
+                "LLM Reminders async_cancel rejected: reminder_id=%r query=%r "
+                "matches=%d",
+                reminder_id,
+                query,
+                len(matches),
+            )
             matching_text = "; ".join(
                 f"{item['id']}: {item['message']} ({item['due_at']})"
                 for item in matches
@@ -150,6 +213,7 @@ class ReminderManager:
         self._remove_schedule(reminder["id"])
         self._reminders.pop(reminder["id"], None)
         await self._async_save()
+        _log_reminder("async_cancel result", reminder)
         return {"cancelled": reminder}
 
     async def async_update(
@@ -158,10 +222,28 @@ class ReminderManager:
         message: str | None = None,
         due_at: str | None = None,
     ) -> dict[str, Any]:
+        _LOGGER.info(
+            "LLM Reminders async_update called: reminder_id=%s message=%r due_at=%r",
+            reminder_id,
+            message,
+            due_at,
+        )
         reminder = self._reminders.get(reminder_id)
         if reminder is None:
+            _LOGGER.warning(
+                "LLM Reminders async_update rejected: reminder_id=%s "
+                "message=%r due_at=%r error=The reminder was not found",
+                reminder_id,
+                message,
+                due_at,
+            )
             raise HomeAssistantError("The reminder was not found.")
         if message is None and due_at is None:
+            _LOGGER.warning(
+                "LLM Reminders async_update rejected: reminder_id=%s "
+                "error=No new message or time",
+                reminder_id,
+            )
             raise HomeAssistantError("Provide a new message or a new time.")
 
         new_message = reminder["message"]
@@ -171,6 +253,14 @@ class ReminderManager:
             try:
                 new_message = normalize_message(message, MAX_MESSAGE_LENGTH)
             except ValueError as err:
+                _LOGGER.warning(
+                    "LLM Reminders async_update rejected: reminder_id=%s "
+                    "message=%r due_at=%r error=%s",
+                    reminder_id,
+                    message,
+                    due_at,
+                    err,
+                )
                 raise HomeAssistantError(str(err)) from err
 
         if due_at is not None:
@@ -180,8 +270,23 @@ class ReminderManager:
                     local_timezone=dt_util.get_time_zone(self.hass.config.time_zone),
                 )
             except ValueError as err:
+                _LOGGER.warning(
+                    "LLM Reminders async_update rejected: reminder_id=%s "
+                    "message=%r due_at=%r error=%s",
+                    reminder_id,
+                    message,
+                    due_at,
+                    err,
+                )
                 raise HomeAssistantError(str(err)) from err
             if due <= dt_util.now():
+                _LOGGER.warning(
+                    "LLM Reminders async_update rejected: reminder_id=%s "
+                    "message=%r due_at=%s error=The reminder time must be in the future",
+                    reminder_id,
+                    new_message,
+                    due.isoformat(),
+                )
                 raise HomeAssistantError("The reminder time must be in the future.")
             new_due_at = due.isoformat()
 
@@ -191,6 +296,7 @@ class ReminderManager:
         self._remove_schedule(reminder_id)
         await self._async_save()
         self._schedule(reminder)
+        _log_reminder("async_update result", reminder)
         return {"reminder": reminder}
 
     def _find_matches(
@@ -261,17 +367,35 @@ class ReminderManager:
 
     async def _async_deliver(self, reminder_id: str) -> None:
         if reminder_id in self._in_flight:
+            _LOGGER.debug(
+                "LLM Reminders delivery skipped: reminder_id=%s reason=in_flight",
+                reminder_id,
+            )
             return
         reminder = self._reminders.get(reminder_id)
         if reminder is None:
+            _LOGGER.debug(
+                "LLM Reminders delivery skipped: reminder_id=%s reason=not_found",
+                reminder_id,
+            )
             return
 
+        _log_reminder("delivery started", reminder)
         self._remove_schedule(reminder_id)
         self._remove_retry(reminder_id)
         self._in_flight.add(reminder_id)
         try:
             state = self.hass.states.get(reminder["satellite"])
             if state is None or state.state in _UNAVAILABLE_STATES or state.state != "idle":
+                _LOGGER.warning(
+                    "LLM Reminders delivery retry scheduled: reminder_id=%s "
+                    "message=%r due_at=%s satellite=%s state=%s",
+                    reminder["id"],
+                    reminder["message"],
+                    reminder["due_at"],
+                    reminder["satellite"],
+                    state.state if state is not None else None,
+                )
                 self._schedule_retry(reminder_id)
                 return
 
@@ -287,23 +411,26 @@ class ReminderManager:
                     blocking=True,
                 )
             except HomeAssistantError:
-                _LOGGER.exception("Unable to deliver reminder %s", reminder_id)
+                _LOGGER.exception(
+                    "LLM Reminders delivery failed: reminder_id=%s message=%r "
+                    "due_at=%s satellite=%s",
+                    reminder["id"],
+                    reminder["message"],
+                    reminder["due_at"],
+                    reminder["satellite"],
+                )
                 self._schedule_retry(reminder_id)
                 return
 
             self._reminders.pop(reminder_id, None)
             await self._async_save()
+            _log_reminder("delivery result", reminder)
         finally:
             self._in_flight.discard(reminder_id)
 
     @staticmethod
     def _announcement_message(reminder: dict[str, Any]) -> str:
-        due = parse_iso_datetime(reminder["due_at"])
-        local_due = dt_util.as_local(due)
-        return (
-            f"Напоминание: {reminder['message']}. "
-            f"Запланировано на {local_due.strftime('%d.%m.%Y в %H:%M')}."
-        )
+        return f"Напоминание: {reminder['message']}."
 
     async def _async_save(self) -> None:
         await self._store.async_save({"reminders": list(self._reminders.values())})
