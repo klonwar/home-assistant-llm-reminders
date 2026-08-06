@@ -5,14 +5,29 @@ conversation agent and Assist Satellite.
 
 ## What you can say
 
-- “Remind me tonight to buy bread.”
-- “Move my bread reminder to tomorrow morning.”
-- “Cancel the bread reminder.”
+English and Russian reminder instructions are included, and the assistant can
+respond in the language you use.
+
+- “Remind me tonight to buy bread.” / «Напомни мне сегодня вечером купить
+  хлеб».
+- “Move my bread reminder to tomorrow morning.” / «Перенеси напоминание купить
+  хлеб на завтра утром».
+- “Cancel the bread reminder.” / «Отмени напоминание о хлебе».
 
 The assistant asks a short follow-up question when the reminder text or time is
 missing or ambiguous. After the reminder is created, Home Assistant announces
 it through the Assist Satellite associated with the request, or through the
 configured default satellite.
+
+## Prerequisites
+
+- Home Assistant Core **2026.8.0 or newer**.
+- An Assist conversation agent connected to an LLM provider (for example,
+  OpenRouter).
+- A speech-to-text (STT) provider for voice input.
+- A text-to-speech (TTS) provider and Assist Satellite for spoken announcements.
+
+This integration provides reminder tools; it does not configure these services.
 
 ## How it works
 
