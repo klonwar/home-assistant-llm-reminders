@@ -9,8 +9,8 @@
   language additions under `languages/` (for example, `en.txt` and `ru.txt`).
 - `tests/` contains pytest tests, including prompt-loader and package-layout
   checks.
-- `README.md`, `DESIGN.md`, and `hacs.json` document usage, architecture, and
-  HACS packaging.
+- `README.md`, `DESIGN.md`, `hacs.json`, `LICENSE`, and `.github/workflows/`
+  document usage, architecture, licensing, and HACS/release automation.
 
 ## Build, Test, and Development Commands
 
@@ -24,6 +24,26 @@ python -m compileall -q custom_components\llm_reminders
 The first runs the test suite; the second checks Python syntax and bytecode
 compilation. There is no standalone local server; runtime validation requires
 installing the integration in a Home Assistant instance.
+
+## HACS Publishing
+
+- Keep `hacs.json` in the repository root with `name` and
+  `content_in_root: false`.
+- Keep `LICENSE` in the repository root. Do not replace or change the license
+  in a feature PR without an explicit maintainer decision.
+- Keep the integration brand asset at
+  `custom_components/llm_reminders/brand/icon.png`. Use a square PNG logo;
+  never commit a placeholder, secret, or instance-specific screenshot.
+- Maintain these GitHub repository topics: `home-assistant`, `hacs`,
+  `home-assistant-integration`, and `custom-component`. Topics are repository
+  metadata configured in GitHub Settings, not keys in `hacs.json`.
+- Keep `manifest.json` keys Hassfest-sorted: `domain`, `name`, then the
+  remaining keys alphabetically. Integrations with `async_setup` must expose
+  the appropriate `CONFIG_SCHEMA`; this config-entry-only integration uses
+  `cv.config_entry_only_config_schema(DOMAIN)`.
+- Keep HACS validation and Hassfest enabled in `.github/workflows/validate.yml`.
+  Do not add `ignore` entries merely to hide a failed requirement; fix the
+  repository metadata or document an approved exception first.
 
 ## Coding Style and Naming
 

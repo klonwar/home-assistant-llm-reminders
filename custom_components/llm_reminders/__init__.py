@@ -4,6 +4,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN, PROMPT_DATA_KEY
 from .llm_diagnostics import async_log_runtime_layout
@@ -11,6 +12,8 @@ from .manager import ReminderManager
 from .prompt_loader import PromptCatalog, load_prompt_catalog
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
