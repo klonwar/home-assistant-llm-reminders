@@ -1,4 +1,4 @@
-name: Release Please
+name: "[Release] Release Please"
 
 on:
   push:
@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   release-please:
+    name: Create release PR or GitHub Release
     runs-on: ubuntu-latest
     steps:
       - name: Release Please

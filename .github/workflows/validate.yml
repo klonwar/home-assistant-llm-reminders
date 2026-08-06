@@ -1,4 +1,4 @@
-name: Validate
+name: "[Validate] HACS + Hassfest"
 
 on:
   push:
@@ -11,6 +11,7 @@ permissions: {}
 
 jobs:
   validate-hacs:
+    name: HACS validation
     runs-on: ubuntu-latest
     steps:
       - name: HACS validation
@@ -19,6 +20,7 @@ jobs:
           category: integration
 
   validate-hassfest:
+    name: Hassfest validation
     runs-on: ubuntu-latest
     permissions:
       contents: read
