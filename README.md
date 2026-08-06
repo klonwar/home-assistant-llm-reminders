@@ -1,38 +1,40 @@
 # LLM Reminders for Home Assistant
 
-An experimental, generic Home Assistant custom integration that contributes
-natural-language reminder tools to Home Assistant's LLM API.
+Create and manage one-time spoken reminders through your Home Assistant
+conversation agent and Assist Satellite.
 
-The integration is deliberately independent of any particular household. It
-does not contain entity IDs, IP addresses, API keys, tokens, exported states,
-or other instance-specific data.
+## What you can say
 
-## What it provides
+- “Remind me tonight to buy bread.”
+- “Move my bread reminder to tomorrow morning.”
+- “Cancel the bread reminder.”
 
-The integration exposes four tools to an LLM conversation agent:
+The assistant asks a short follow-up question when the reminder text or time is
+missing or ambiguous. After the reminder is created, Home Assistant announces
+it through the Assist Satellite associated with the request, or through the
+configured default satellite.
 
-- `create_reminder` — create a one-time reminder from normalized text and an
-  absolute ISO-8601 due time;
-- `list_reminders` — list active reminders, optionally filtered by text;
-- `cancel_reminder` — cancel a reminder by ID or a unique text query;
-- `update_reminder` — change a reminder's text or due time.
+## How it works
 
-The LLM is responsible for understanding the user's natural language. The
-integration is responsible for validation, persistence, scheduling, delivery,
-and returning the result of the operation. The internal storage and scheduler
-are not exposed to the model.
+1. You speak to your Home Assistant conversation agent.
+2. The agent calls a reminder tool to create, list, update, or cancel a
+   reminder.
+3. The integration validates the request, stores the reminder, schedules it,
+   and delivers the announcement.
+
+The four available LLM tools are `create_reminder`, `list_reminders`,
+`update_reminder`, and `cancel_reminder`. They are callable tools, not ordinary
+Home Assistant entities. Native Home Assistant timers remain available and are
+managed separately.
 
 ## Installation
 
 ### HACS
 
-This repository is structured as a HACS integration repository. Add the GitHub
-repository as a custom HACS repository with type `Integration`, download it,
-and restart Home Assistant. HACS custom repositories are documented at
-<https://hacs.xyz/docs/faq/custom_repositories/>.
-
-Before publishing this repository, replace the placeholder repository URLs in
-`custom_components/llm_reminders/manifest.json`.
+This repository is structured as a HACS integration repository. In HACS, add
+the GitHub repository as a custom repository with type **Integration**, download
+it, and restart Home Assistant. See the [HACS custom repository
+documentation](https://hacs.xyz/docs/faq/custom_repositories/) for details.
 
 ### Manual development install
 
@@ -46,65 +48,58 @@ config/
 
 Restart Home Assistant after copying the files.
 
-## Home Assistant version compatibility
+## Requirements and compatibility
 
-This integration uses Home Assistant's LLM platform API:
+Use Home Assistant Core **2026.8.0 or newer**. This is the first version with
+the LLM platform loader and `async_get_tools()` integration point used by the
+reminder tools.
 
-```text
-custom_components/llm_reminders/llm.py
-```
+On Home Assistant Core 2026.7.x, the integration can load, but its four
+reminder tools are not added to Assist because the newer platform loader is not
+available. Native Home Assistant timer tools are unaffected.
 
-The required lazy LLM platform loader and `async_get_tools()` integration
-point are available starting with Home Assistant Core **2026.8.0**. Use Core
-2026.8.0 or newer.
+After upgrading Home Assistant, restart the container. You do not need to
+change `configuration.yaml`, local processing, or the native timer tools. See
+the [Home Assistant LLM API documentation](https://developers.home-assistant.io/docs/core/llm/)
+for platform details.
 
-Home Assistant Core 2026.7.x includes the older `homeassistant.helpers.llm`
-Assist API, but does not include the `homeassistant.components.llm` platform
-loader. On 2026.7.x the integration can load normally and the native
-`HassStartTimer` tool can still appear, but `llm.py` is never imported and the
-four reminder tools are not added to Assist.
+## Configuration
 
-The current [Home Assistant LLM API documentation](https://developers.home-assistant.io/docs/core/llm/)
-describes the newer platform API. After upgrading
-Home Assistant, restart the container; no changes to `configuration.yaml`,
-local processing, or the native timer tools are required.
+Open **Settings → Devices & services → Add integration**, select **LLM
+Reminders**, and configure an optional default Assist Satellite.
+
+The default satellite is used when the LLM request has no device context. When
+the request includes a Home Assistant device ID, the integration first looks
+for an `assist_satellite` entity belonging to that device. This supports one or
+many satellites without hardcoding their names.
+
+Configure your conversation agent separately (for example, the OpenRouter
+conversation integration) and enable Assist/home-control mode so it can receive
+Home Assistant LLM tools. After setup, verify tool calls in the Assist Debug
+dialog.
+
+The integration does not replace your conversation agent, speech-to-text, or
+text-to-speech provider, and it does not modify native Home Assistant/LVA timer
+intents.
 
 ## Language support
 
-The integration supports language-aware LLM instructions. The base instructions
-are stored in `custom_components/llm_reminders/prompts/base.txt`, with optional
-language-specific additions in `prompts/languages/`:
+The integration adds language-aware instructions to the LLM request. The base
+instructions are stored in `custom_components/llm_reminders/prompts/base.txt`,
+with optional additions in `prompts/languages/`:
 
 - `en.txt` — English guidance;
 - `ru.txt` — Russian guidance and Russian time expressions.
 
 The matching file is selected from the Assist request language. Regional tags
 such as `en-US` and `ru-RU` use their base language file. Languages without a
-dedicated file use the neutral base instructions and the model is asked to
-respond in the user's language. Adding another language only requires adding a
-new `<language>.txt` file; a code change is not required.
-
-## Configuration
-
-Open `Settings → Devices & services → Add integration`, select **LLM
-Reminders**, and configure an optional default Assist Satellite.
-
-The default satellite is used only when the LLM request has no device context.
-When the request includes a Home Assistant device ID, the integration first
-looks for an `assist_satellite` entity belonging to that device. This makes the
-same package usable with one or many satellites without hardcoding their names.
-
-The OpenRouter conversation integration remains responsible for the model
-connection. Configure it separately and enable Assist/home-control mode so its
-conversation agent can receive Home Assistant LLM tools.
-
-After setup, verify tool calls in the Assist Debug dialog. The tools are not
-shown as ordinary entities; they are callable LLM tools.
+dedicated file use the neutral base instructions, and the model is asked to
+respond in the user's language. Adding another language only requires a new
+`<language>.txt` file; no code change is required.
 
 ## Recommended system-prompt rules
 
-Keep the user's existing system prompt and add equivalent instructions for
-reminders:
+Keep your existing system prompt and add equivalent instructions for reminders:
 
 ```text
 Use reminder tools for one-time spoken reminders.
@@ -118,68 +113,38 @@ several reminders match a cancellation or update request, ask the user to
 clarify.
 ```
 
-The integration does not replace the conversation agent, speech-to-text, or
-text-to-speech provider. It also does not modify native Home Assistant/LVA
-timer intents.
-
-## Example tool flow
-
-User:
-
-```text
-Напомни сегодня вечером купить хлеб
-```
-
-The LLM calls:
-
-```json
-{
-  "message": "купить хлеб",
-  "due_at": "2026-08-01T19:00:00+03:00"
-}
-```
-
-The integration stores the reminder and later announces it through the Assist
-Satellite associated with the request device, or the configured default
-satellite.
+## Time interpretation
 
 If the user gives only a time, the conversation agent should ask what to
-remember. If the user gives only a reminder text, it should ask when to
-deliver it. For an ambiguous phrase such as `сегодня в 8`, interpret the hour
-as the nearest future 08:00 or 20:00 on that date. If neither occurrence is
-still possible today, ask the user to clarify instead of silently moving the
-reminder to tomorrow.
+remember. If the user gives only reminder text, it should ask when to deliver
+it. For an ambiguous phrase such as `today at 8`, interpret the hour as the
+nearest future 08:00 or 20:00 on that date. If neither occurrence is still
+possible today, ask the user to clarify instead of silently moving the reminder
+to tomorrow.
 
 ## Persistence and delivery
 
-Reminders are persisted in Home Assistant's private `.storage` area. The
-public repository contains no reminder data. Pending reminders are scheduled
-again after Home Assistant restarts. If a target satellite is unavailable or
-busy, delivery is retried rather than redirected to another device.
+Reminders are persisted in Home Assistant's private `.storage` area. Pending
+reminders are scheduled again after Home Assistant restarts. If a target
+satellite is unavailable or busy, delivery is retried rather than redirected
+to another device.
 
 ## Current limitations
 
-- The first version intentionally does not persist idempotency keys. A rare
-  provider timeout followed by a repeated tool call may create a duplicate.
-- Reminder records are one-time events; native HA/LVA timers remain separate.
+- The first version does not persist idempotency keys. A rare provider timeout
+  followed by a repeated tool call may create a duplicate.
+- Reminder records are one-time events; native Home Assistant/LVA timers remain
+  separate.
 - The integration does not provide a calendar UI.
-- The exact 15-second continued-conversation listening timeout is controlled by
-  the Assist satellite/conversation pipeline, not by the LLM tool API. This
-  package does not confuse it with the overall Assist pipeline timeout. A
-  future satellite-specific adapter can start the timeout when the satellite
-  enters `listening`.
 
 ## Development
 
-The package is intentionally self-contained and suitable for a separate public
-repository. Run static checks before publishing:
+Run these checks before publishing changes:
 
 ```bash
-python -m compileall custom_components/llm_reminders
+python -m compileall -q custom_components/llm_reminders
 python -m pytest tests
 ```
-
-No secrets or Home Assistant instance exports belong in this repository.
 
 ### Release automation
 
@@ -190,6 +155,4 @@ Release PR, updates `manifest.json` and `CHANGELOG.md`, and publishes the
 GitHub Release after that PR is merged.
 
 Do not edit the integration version manually in ordinary feature or fix PRs.
-Review the HACS and Hassfest checks before merging a Release PR. The release
-workflow uses the repository secret `RELEASE_PLEASE_TOKEN`; rotate that
-fine-grained token before it expires.
+Review the HACS and Hassfest checks before merging a Release PR.
