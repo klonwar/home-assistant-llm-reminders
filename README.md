@@ -13,6 +13,7 @@ respond in the language you use.
 - “Move my bread reminder to tomorrow morning.” / «Перенеси напоминание купить
   хлеб на завтра утром».
 - “Cancel the bread reminder.” / «Отмени напоминание о хлебе».
+- “What reminders do I have?” / «Какие у меня есть напоминания».
 
 The assistant asks a short follow-up question when the reminder text or time is
 missing or ambiguous. After the reminder is created, Home Assistant announces
