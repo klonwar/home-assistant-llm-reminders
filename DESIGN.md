@@ -295,3 +295,63 @@ configuration, language support, optional system-prompt guidance, time
 interpretation, persistence, limitations, and development. Wording is concise
 and action-oriented, while technical claims and existing user-relevant details
 remain unchanged.
+
+## Reminder prompt policy XML design (2026-08-10)
+
+### Understanding summary
+
+- The supplied `<reminder_tools_policy>` text is the canonical policy for the
+  integration's reminder tools.
+- The policy is prompt text for the language model; the XML-like wrapper is a
+  delimiter, not a schema that Home Assistant or the integration must parse.
+- The selected language addition must be placed inside that same block, at the
+  end, as plain text without nested XML elements.
+- Only one language addition is selected from the request language; unsupported
+  languages receive no addition.
+- Existing runtime behavior, tool schemas, persistence, delivery, and
+  configuration must remain unchanged unless separately approved.
+- The resulting prompt must not contain redundant or conflicting policy rules.
+
+### Assumptions and non-goals
+
+- Prompt loading remains a one-time, bundled-file operation with no material
+  performance or scale change.
+- No new user data, network access, security surface, or persistence behavior
+  is introduced.
+- The Home Assistant 2026.8+ compatibility target remains unchanged.
+- This design does not authorize changes to `ReminderManager`, tool validation,
+  or due-time parsing.
+
+### Decision log
+
+1. Use the supplied policy as the canonical base rather than appending it to
+   the existing verbose base prompt.
+2. Preserve the current language-selection behavior and insert only the
+   selected language text inside the policy block.
+3. Avoid nested tags or XML parsing; insert plain language text immediately
+   before `</reminder_tools_policy>`.
+4. Move Russian-specific time interpretations into the Russian addition so
+   they do not appear in prompts for other languages.
+5. Remove duplicated timezone and ambiguity instructions from local additions;
+   keep each universal rule only in the common policy.
+6. Keep runtime and tool behavior unchanged to protect existing functionality.
+
+### Final design
+
+`base.txt` contains one `<reminder_tools_policy>` block with the universal
+rules: reminder-versus-timer scope, message language, required message/time,
+absolute RFC3339 `due_at` in the Home Assistant timezone with an offset,
+ambiguity handling, multiple-match clarification, error reporting, and a short
+post-success confirmation.
+
+`en.txt` and `ru.txt` contain only language-specific plain text. English keeps
+the response-language instruction and natural interpretations of morning,
+daytime, and evening. Russian keeps the response-language instruction and the
+09:00/13:00/19:00, nearest-future 08:00/20:00, and same-day interpretations.
+Neither file repeats the common timezone or ambiguity policy.
+
+`build_prompt` normalizes the LLM language, selects at most one addition, and
+inserts it before the closing policy tag. It returns the base block unchanged
+for unsupported languages. Tests verify a single block, language placement,
+no trailing text outside the block, and no duplicate policy phrases, followed
+by the existing full pytest and compileall checks.

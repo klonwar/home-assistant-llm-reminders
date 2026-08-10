@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+_POLICY_OPENING_TAG = "<reminder_tools_policy>"
+_POLICY_CLOSING_TAG = "</reminder_tools_policy>"
+
 
 @dataclass(frozen=True)
 class PromptCatalog:
@@ -30,6 +33,7 @@ def load_prompt_catalog(prompts_dir: Path | None = None) -> PromptCatalog:
     base = base_path.read_text(encoding="utf-8").strip()
     if not base:
         raise ValueError(f"The base LLM prompt is empty: {base_path}")
+    _validate_policy_block(base, base_path)
 
     language_dir = prompts_dir / "languages"
     language_additions: dict[str, str] = {}
@@ -38,7 +42,12 @@ def load_prompt_catalog(prompts_dir: Path | None = None) -> PromptCatalog:
             language = normalize_language(path.stem)
             if language is None:
                 continue
-            language_additions[language] = path.read_text(encoding="utf-8").strip()
+            addition = path.read_text(encoding="utf-8").strip()
+            if _POLICY_OPENING_TAG in addition or _POLICY_CLOSING_TAG in addition:
+                raise ValueError(
+                    f"Language prompt must not contain policy XML tags: {path}"
+                )
+            language_additions[language] = addition
 
     return PromptCatalog(
         base=base,
@@ -47,9 +56,35 @@ def load_prompt_catalog(prompts_dir: Path | None = None) -> PromptCatalog:
 
 
 def build_prompt(catalog: PromptCatalog, language: str | None) -> str:
-    """Combine the base prompt with the matching language addition."""
-    parts = [catalog.base]
+    """Insert the matching language addition inside the policy block."""
+    _validate_policy_block(catalog.base, "base prompt")
     language_key = normalize_language(language)
     if language_key and (addition := catalog.language_additions.get(language_key)):
-        parts.append(addition)
-    return "\n\n".join(parts)
+        closing_index = catalog.base.index(_POLICY_CLOSING_TAG)
+        return (
+            f"{catalog.base[:closing_index].rstrip()}\n\n"
+            f"{addition}\n{catalog.base[closing_index:]}"
+        )
+    return catalog.base
+
+
+def _validate_policy_block(prompt: str, source: Path | str) -> None:
+    """Ensure the prompt consists of exactly one complete policy block."""
+    if prompt.count(_POLICY_OPENING_TAG) != 1:
+        raise ValueError(
+            f"Prompt must contain exactly one {_POLICY_OPENING_TAG}: {source}"
+        )
+    if prompt.count(_POLICY_CLOSING_TAG) != 1:
+        raise ValueError(
+            f"Prompt must contain exactly one {_POLICY_CLOSING_TAG}: {source}"
+        )
+
+    opening_index = prompt.index(_POLICY_OPENING_TAG)
+    closing_index = prompt.index(_POLICY_CLOSING_TAG)
+    closing_end = closing_index + len(_POLICY_CLOSING_TAG)
+    if (
+        opening_index > closing_index
+        or prompt[:opening_index].strip()
+        or prompt[closing_end:].strip()
+    ):
+        raise ValueError(f"Prompt must contain only the policy block: {source}")
