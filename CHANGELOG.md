@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/klonwar/home-assistant-llm-reminders/compare/v0.2.0...v0.3.0) (2026-08-10)
+
+
+### Features
+
+* better prompt ([ff7dede](https://github.com/klonwar/home-assistant-llm-reminders/commit/ff7dededbc25b7aa75c536e09b1b106250807516))
+
 ## [0.2.0](https://github.com/klonwar/home-assistant-llm-reminders/compare/v0.1.8...v0.2.0) (2026-08-06)
 
 
