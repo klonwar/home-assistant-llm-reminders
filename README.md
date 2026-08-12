@@ -100,18 +100,11 @@ intents.
 
 ## Language support
 
-The integration adds language-aware instructions to the LLM request. The base
-instructions are stored in `custom_components/llm_reminders/prompts/base.txt`,
-with optional additions in `prompts/languages/`:
-
-- `en.txt` — English guidance;
-- `ru.txt` — Russian guidance and Russian time expressions.
-
-The matching file is selected from the Assist request language. Regional tags
-such as `en-US` and `ru-RU` use their base language file. Languages without a
-dedicated file use the neutral base instructions, and the model is asked to
-respond in the user's language. Adding another language only requires a new
-`<language>.txt` file; no code change is required.
+The integration adds one concise, language-neutral policy prompt from
+`custom_components/llm_reminders/prompts/base.txt`. It asks the model to
+respond in the user's language and to normalize natural-language time into the
+structured `when` field. The model does not need access to the current date,
+time, or timezone; Home Assistant resolves those values after the tool call.
 
 ## Recommended system-prompt rules
 
@@ -119,24 +112,22 @@ Keep your existing system prompt and add equivalent instructions for reminders:
 
 ```text
 Use reminder tools for one-time spoken reminders.
-Ask concise follow-up questions when reminder text or time is missing or
-ambiguous. Use the Home Assistant timezone. Use 09:00 for morning, 13:00 for
-daytime, and 19:00 for evening unless the user specifies another time. For an
-unqualified 12-hour time, choose the nearest future occurrence. Always send an
-absolute ISO-8601/RFC3339 due_at value with a timezone offset; never send a
-timezone-less value. Do not claim success if a tool reports an error. If
-several reminders match a cancellation or update request, ask the user to
-clarify.
+Always send `message` and a structured `when` object; never send or calculate
+`due_at`. Use `when.kind=relative` with string `value` and `unit` fields for
+phrases such as “через пять минут”, or `when.kind=calendar` for phrases such
+as “завтра в 15:00”. Ask concise follow-up questions when time is missing or
+ambiguous. Do not claim success if a tool reports an error. If several
+reminders match a cancellation or update request, ask the user to clarify.
 ```
 
 ## Time interpretation
 
-If the user gives only a time, the conversation agent should ask what to
-remember. If the user gives only reminder text, it should ask when to deliver
-it. For an ambiguous phrase such as `today at 8`, interpret the hour as the
-nearest future 08:00 or 20:00 on that date. If neither occurrence is still
-possible today, ask the user to clarify instead of silently moving the reminder
-to tomorrow.
+Relative and calendar phrases are resolved by Home Assistant using its current
+time and configured timezone. “Через пять минут” becomes a relative duration;
+“завтра в 15:00” becomes a calendar reference; “15-го числа в 13:00” becomes
+the nearest future day of month. If the user gives no time or the hour remains
+ambiguous, ask for clarification. Recurring phrases such as “каждый день” are
+not supported by the one-time reminder contract.
 
 ## Persistence and delivery
 

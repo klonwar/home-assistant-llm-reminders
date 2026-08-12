@@ -17,6 +17,94 @@ from .manager import ReminderManager
 
 _LOGGER = logging.getLogger(__name__)
 
+_DURATION_SCHEMA = vol.Schema(
+    {
+        vol.Required(
+            "value",
+            description="Positive duration number as a string.",
+        ): cv.string,
+        vol.Required(
+            "unit",
+            description="Canonical unit: second, minute, hour, day, or week.",
+        ): vol.In(
+            ("second", "minute", "hour", "day", "week")
+        ),
+    }
+)
+_WHEN_SCHEMA = vol.Schema(
+    {
+        vol.Required(
+            "kind",
+            description="Use relative for an interval or calendar for a date/time.",
+        ): vol.In(("relative", "calendar")),
+        vol.Optional(
+            "duration",
+            description="One or more relative duration components.",
+        ): [_DURATION_SCHEMA],
+        vol.Optional(
+            "target_time",
+            description="Local HH:MM after a whole-day or whole-week interval.",
+        ): cv.string,
+        vol.Optional(
+            "date_ref",
+            description="Semantic calendar reference for a calendar reminder.",
+        ): vol.In(
+            (
+                "today",
+                "tomorrow",
+                "day_after_tomorrow",
+                "weekday",
+                "next_weekday",
+                "day_of_month",
+                "month_day",
+                "explicit",
+                "nearest_future",
+            )
+        ),
+        vol.Optional(
+            "occurrence",
+            description="For weekdays, use next or nearest_future.",
+        ): vol.In(("nearest_future", "next")),
+        vol.Optional(
+            "weekday", description="Canonical English weekday name."
+        ): cv.string,
+        vol.Optional(
+            "month_ref",
+            description="Use nearest_future for a day-of-month reference.",
+        ): vol.In(("nearest_future",)),
+        vol.Optional(
+            "month", description="Month number from 1 to 12."
+        ): cv.string,
+        vol.Optional(
+            "year_ref",
+            description="Use nearest_future for a month/day reference.",
+        ): vol.In(("nearest_future",)),
+        vol.Optional(
+            "day_of_month",
+            description="Day number from 1 to 31.",
+        ): cv.string,
+        vol.Optional(
+            "date_value",
+            description="Explicit date in YYYY-MM-DD format.",
+        ): cv.string,
+        vol.Optional(
+            "local_time", description="Local clock time in HH:MM."
+        ): cv.string,
+        vol.Optional(
+            "day_period",
+            description="Named local period: morning, day, or evening.",
+        ): vol.In(("morning", "day", "evening")),
+        vol.Optional(
+            "hour",
+            description="Hour number; use meridiem when 1-12 is ambiguous.",
+        ): cv.string,
+        vol.Optional(
+            "meridiem",
+            description="Use am, pm, or unspecified with hour.",
+        ): vol.In(("am", "pm", "unspecified")),
+    }
+)
+
 
 def get_manager(hass: HomeAssistant) -> ReminderManager | None:
     """Return the configured reminder manager, if one is available."""
@@ -64,11 +152,18 @@ class CreateReminderTool(llm.Tool):
     """Create a one-time reminder."""
 
     name = "create_reminder"
-    description = "Create a one-time voice reminder with an absolute ISO-8601 due time."
+    description = (
+        "Create a one-time reminder. Put the user's time intent in when as a "
+        "relative interval or calendar expression. Do not calculate an "
+        "absolute timestamp."
+    )
     parameters = vol.Schema(
         {
-            vol.Required("message"): cv.string,
-            vol.Required("due_at"): cv.string,
+            vol.Required("message", description="Reminder text."): cv.string,
+            vol.Required(
+                "when",
+                description="Structured relative or calendar reminder time.",
+            ): _WHEN_SCHEMA,
         }
     )
 
@@ -83,7 +178,7 @@ class CreateReminderTool(llm.Tool):
             raise HomeAssistantError("The reminder integration is not configured.")
         return await manager.async_create(
             message=tool_input.tool_args["message"],
-            due_at=tool_input.tool_args["due_at"],
+            when=tool_input.tool_args["when"],
             device_id=llm_context.device_id,
         )
 
@@ -138,12 +233,20 @@ class UpdateReminderTool(llm.Tool):
     """Update one reminder."""
 
     name = "update_reminder"
-    description = "Change the text or absolute due time of one reminder by id."
+    description = (
+        "Change the text or structured time of one reminder by id. The when "
+        "value uses the same relative or calendar contract as create_reminder."
+    )
     parameters = vol.Schema(
         {
-            vol.Required("reminder_id"): cv.string,
-            vol.Optional("message"): cv.string,
-            vol.Optional("due_at"): cv.string,
+            vol.Required(
+                "reminder_id", description="Reminder identifier."
+            ): cv.string,
+            vol.Optional("message", description="New reminder text."): cv.string,
+            vol.Optional(
+                "when",
+                description="New structured relative or calendar reminder time.",
+            ): _WHEN_SCHEMA,
         }
     )
 
@@ -159,7 +262,7 @@ class UpdateReminderTool(llm.Tool):
         return await manager.async_update(
             reminder_id=tool_input.tool_args["reminder_id"],
             message=tool_input.tool_args.get("message"),
-            due_at=tool_input.tool_args.get("due_at"),
+            when=tool_input.tool_args.get("when"),
         )
 
 

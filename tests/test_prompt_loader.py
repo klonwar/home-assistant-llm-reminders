@@ -30,7 +30,7 @@ def test_prompt_catalog_contains_base_and_language_additions() -> None:
     catalog = _MODULE.load_prompt_catalog(PROMPTS_PATH)
 
     assert catalog.base
-    assert set(catalog.language_additions) == {"en", "ru"}
+    assert catalog.language_additions == {}
 
 
 def test_build_prompt_selects_language_addition() -> None:
@@ -42,31 +42,45 @@ def test_build_prompt_selects_language_addition() -> None:
 
     assert english.startswith("<reminder_tools_policy>")
     assert english.endswith("</reminder_tools_policy>")
-    assert "For English requests" in english
-    assert "Пользователь говорит по-русски" in russian
-    assert "Пользователь говорит по-русски" not in english
-    assert english.index("For English requests") < english.index(
-        "</reminder_tools_policy>"
-    )
-    assert russian.index("Пользователь говорит по-русски") < russian.index(
-        "</reminder_tools_policy>"
-    )
-    assert german == catalog.base
+    assert "user's language" in english
+    assert "user's language" in russian
+    assert english == russian == german == catalog.base
 
 
-def test_prompt_requires_timezone_offset_for_due_at() -> None:
+def test_prompt_forbids_model_timestamp_calculation() -> None:
     catalog = _MODULE.load_prompt_catalog(PROMPTS_PATH)
 
-    assert "due_at must always include a timezone offset." in catalog.base
-    assert "часовым поясом" not in catalog.language_additions["ru"]
+    assert "Never calculate or send `due_at`" in catalog.base
+    assert "Home Assistant resolves `when`" in catalog.base
+    assert "native timers" in catalog.base
 
 
-def test_language_additions_do_not_duplicate_common_ambiguity_rules() -> None:
+def test_prompt_keeps_the_runtime_policy_concise() -> None:
     catalog = _MODULE.load_prompt_catalog(PROMPTS_PATH)
 
-    assert "timezone" not in catalog.language_additions["en"].casefold()
-    assert "timezone" not in catalog.language_additions["ru"].casefold()
-    assert "уточняющий вопрос" not in catalog.language_additions["ru"]
+    assert len(catalog.base.split()) < 100
+    assert '"kind":"relative"' not in catalog.base
+    assert '"kind":"calendar"' not in catalog.base
+    assert "day_of_month" not in catalog.base
+    assert "month_day" not in catalog.base
+    assert "target_time" not in catalog.base
+
+
+def test_prompt_distinguishes_create_and_update_fields() -> None:
+    catalog = _MODULE.load_prompt_catalog(PROMPTS_PATH)
+
+    assert "Call `create_reminder` with message" in catalog.base
+    assert "`update_reminder`" in catalog.base
+    assert "changed fields only" in catalog.base
+
+
+def test_prompt_preserves_tool_outcome_and_confirmation_policy() -> None:
+    catalog = _MODULE.load_prompt_catalog(PROMPTS_PATH)
+
+    assert "update/cancellation has multiple matches" in catalog.base
+    assert "never" in catalog.base and "claim success" in catalog.base
+    assert "briefly confirm" in catalog.base
+    assert "clarification ending with `?`" in catalog.base
 
 
 def test_prompt_loader_rejects_text_outside_policy_block(tmp_path: Path) -> None:

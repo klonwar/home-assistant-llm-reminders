@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 import types
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import pytest
 
@@ -23,11 +24,15 @@ def _install_homeassistant_stubs() -> None:
     core = types.ModuleType("homeassistant.core")
     exceptions = types.ModuleType("homeassistant.exceptions")
     helpers = types.ModuleType("homeassistant.helpers")
+    config_validation = types.ModuleType("homeassistant.helpers.config_validation")
+    llm_helpers = types.ModuleType("homeassistant.helpers.llm")
     entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
     event = types.ModuleType("homeassistant.helpers.event")
     storage = types.ModuleType("homeassistant.helpers.storage")
     util = types.ModuleType("homeassistant.util")
     dt = types.ModuleType("homeassistant.util.dt")
+    components = types.ModuleType("homeassistant.components")
+    llm_platform = types.ModuleType("homeassistant.components.llm")
 
     class HomeAssistant:
         pass
@@ -49,9 +54,28 @@ def _install_homeassistant_stubs() -> None:
         async def async_save(self, data: dict[str, Any]) -> None:
             self.saved.append(data)
 
+    class Tool:
+        pass
+
+    class LLMTools:
+        def __init__(self, *, tools: Any, prompt: str | None) -> None:
+            self.tools = tools
+            self.prompt = prompt
+
+    class LLMContext:
+        pass
+
+    class ToolInput:
+        pass
+
     core.HomeAssistant = HomeAssistant
     core.callback = callback
     exceptions.HomeAssistantError = HomeAssistantError
+    config_validation.string = str
+    llm_helpers.LLMContext = LLMContext
+    llm_helpers.ToolInput = ToolInput
+    llm_platform.Tool = Tool
+    llm_platform.LLMTools = LLMTools
     entity_registry.async_get = lambda _hass: None
     storage.Store = Store
     event.async_call_later = lambda *_args, **_kwargs: None
@@ -61,8 +85,11 @@ def _install_homeassistant_stubs() -> None:
     dt.get_time_zone = lambda _name: timezone(timedelta(hours=3))
 
     helpers.entity_registry = entity_registry
+    helpers.config_validation = config_validation
+    helpers.llm = llm_helpers
     helpers.event = event
     helpers.storage = storage
+    components.llm = llm_platform
     util.dt = dt
     homeassistant.core = core
     homeassistant.exceptions = exceptions
@@ -75,9 +102,13 @@ def _install_homeassistant_stubs() -> None:
             "homeassistant.core": core,
             "homeassistant.exceptions": exceptions,
             "homeassistant.helpers": helpers,
+            "homeassistant.helpers.config_validation": config_validation,
+            "homeassistant.helpers.llm": llm_helpers,
             "homeassistant.helpers.entity_registry": entity_registry,
             "homeassistant.helpers.event": event,
             "homeassistant.helpers.storage": storage,
+            "homeassistant.components": components,
+            "homeassistant.components.llm": llm_platform,
             "homeassistant.util": util,
             "homeassistant.util.dt": dt,
         }
@@ -219,7 +250,7 @@ def test_delivery_retries_when_satellite_is_busy(
     assert not hass.services.calls
 
 
-def test_create_localizes_naive_due_at(caplog: pytest.LogCaptureFixture) -> None:
+def test_create_resolves_calendar_when(caplog: pytest.LogCaptureFixture) -> None:
     hass = _FakeHass()
     manager = manager_module.ReminderManager(
         hass,
@@ -230,7 +261,12 @@ def test_create_localizes_naive_due_at(caplog: pytest.LogCaptureFixture) -> None
     asyncio.run(
         manager.async_create(
             message="buy bread",
-            due_at="2099-08-01T19:00:00",
+            when={
+                "kind": "calendar",
+                "date_ref": "explicit",
+                "date_value": "2099-08-01",
+                "local_time": "19:00",
+            },
             device_id=None,
         )
     )
@@ -239,12 +275,12 @@ def test_create_localizes_naive_due_at(caplog: pytest.LogCaptureFixture) -> None
     assert reminder["due_at"].endswith("+03:00")
     assert "async_create called" in caplog.text
     assert "message='buy bread'" in caplog.text
-    assert "due_at='2099-08-01T19:00:00'" in caplog.text
+    assert "when={'kind': 'calendar'" in caplog.text
     assert "async_create result" in caplog.text
     assert "due_at=2099-08-01T19:00:00+03:00" in caplog.text
 
 
-def test_update_preserves_explicit_due_at_offset() -> None:
+def test_update_resolves_calendar_when() -> None:
     hass = _FakeHass()
     manager = manager_module.ReminderManager(hass, {})
     reminder = _reminder()
@@ -253,11 +289,296 @@ def test_update_preserves_explicit_due_at_offset() -> None:
     asyncio.run(
         manager.async_update(
             reminder_id=reminder["id"],
-            due_at="2099-08-01T19:00:00+05:00",
+            when={
+                "kind": "calendar",
+                "date_ref": "explicit",
+                "date_value": "2099-08-01",
+                "local_time": "19:00",
+            },
         )
     )
 
-    assert manager._reminders[reminder["id"]]["due_at"].endswith("+05:00")
+    assert manager._reminders[reminder["id"]]["due_at"].endswith("+03:00")
+
+
+def test_update_clears_pending_retry_before_rescheduling() -> None:
+    hass = _FakeHass()
+    manager = manager_module.ReminderManager(hass, {})
+    reminder = _reminder()
+    manager._reminders[reminder["id"]] = reminder
+    unsubscribed: list[str] = []
+    manager._retry_scheduled[reminder["id"]] = lambda: unsubscribed.append(
+        reminder["id"]
+    )
+
+    asyncio.run(
+        manager.async_update(
+            reminder_id=reminder["id"],
+            when={
+                "kind": "calendar",
+                "date_ref": "explicit",
+                "date_value": "2099-08-01",
+                "local_time": "19:00",
+            },
+        )
+    )
+
+    assert unsubscribed == [reminder["id"]]
+    assert reminder["id"] not in manager._retry_scheduled
+
+
+def test_cancel_clears_pending_retry() -> None:
+    hass = _FakeHass()
+    manager = manager_module.ReminderManager(hass, {})
+    reminder = _reminder()
+    manager._reminders[reminder["id"]] = reminder
+    unsubscribed: list[str] = []
+    manager._retry_scheduled[reminder["id"]] = lambda: unsubscribed.append(
+        reminder["id"]
+    )
+
+    asyncio.run(manager.async_cancel(reminder_id=reminder["id"]))
+
+    assert unsubscribed == [reminder["id"]]
+    assert reminder["id"] not in manager._retry_scheduled
+
+
+def test_resolve_relative_duration_uses_home_assistant_now() -> None:
+    local_timezone = timezone(timedelta(hours=3))
+    now = datetime(2026, 8, 12, 12, 50, tzinfo=local_timezone)
+
+    due = manager_module.resolve_when(
+        {
+            "kind": "relative",
+            "duration": [{"value": "5", "unit": "minute"}],
+        },
+        now,
+        local_timezone,
+    )
+
+    assert due == datetime(2026, 8, 12, 12, 55, tzinfo=local_timezone)
+
+
+def test_resolve_composed_relative_duration_with_target_time() -> None:
+    local_timezone = timezone(timedelta(hours=3))
+    now = datetime(2026, 8, 12, 12, 50, tzinfo=local_timezone)
+
+    due = manager_module.resolve_when(
+        {
+            "kind": "relative",
+            "duration": [{"value": "1", "unit": "week"}],
+            "target_time": "15:00",
+        },
+        now,
+        local_timezone,
+    )
+
+    assert due == datetime(2026, 8, 19, 15, tzinfo=local_timezone)
+
+
+@pytest.mark.parametrize(
+    ("when", "expected"),
+    [
+        (
+            {
+                "kind": "calendar",
+                "date_ref": "tomorrow",
+                "local_time": "15:00",
+            },
+            datetime(2026, 8, 13, 15, tzinfo=timezone(timedelta(hours=3))),
+        ),
+        (
+            {
+                "kind": "calendar",
+                "date_ref": "day_of_month",
+                "day_of_month": "15",
+                "month_ref": "nearest_future",
+                "local_time": "13:00",
+            },
+            datetime(2026, 8, 15, 13, tzinfo=timezone(timedelta(hours=3))),
+        ),
+        (
+            {
+                "kind": "calendar",
+                "date_ref": "month_day",
+                "month": "7",
+                "day_of_month": "15",
+                "year_ref": "nearest_future",
+                "local_time": "13:00",
+            },
+            datetime(2027, 7, 15, 13, tzinfo=timezone(timedelta(hours=3))),
+        ),
+        (
+            {
+                "kind": "calendar",
+                "date_ref": "weekday",
+                "weekday": "monday",
+                "local_time": "09:00",
+            },
+            datetime(2026, 8, 17, 9, tzinfo=timezone(timedelta(hours=3))),
+        ),
+        (
+            {
+                "kind": "calendar",
+                "date_ref": "nearest_future",
+                "local_time": "15:00",
+            },
+            datetime(2026, 8, 12, 15, tzinfo=timezone(timedelta(hours=3))),
+        ),
+    ],
+)
+def test_resolve_calendar_references(when: dict[str, Any], expected: datetime) -> None:
+    local_timezone = timezone(timedelta(hours=3))
+    now = datetime(2026, 8, 12, 12, 50, tzinfo=local_timezone)
+
+    assert manager_module.resolve_when(when, now, local_timezone) == expected
+
+
+def test_resolve_day_period_and_ambiguous_eight() -> None:
+    local_timezone = timezone(timedelta(hours=3))
+    now = datetime(2026, 8, 12, 12, 50, tzinfo=local_timezone)
+
+    assert manager_module.resolve_when(
+        {
+            "kind": "calendar",
+            "date_ref": "tomorrow",
+            "day_period": "morning",
+        },
+        now,
+        local_timezone,
+    ) == datetime(2026, 8, 13, 9, tzinfo=local_timezone)
+    assert manager_module.resolve_when(
+        {
+            "kind": "calendar",
+            "date_ref": "today",
+            "hour": "8",
+            "meridiem": "unspecified",
+        },
+        now,
+        local_timezone,
+    ) == datetime(2026, 8, 12, 20, tzinfo=local_timezone)
+
+
+def test_resolve_rejects_ambiguous_or_past_calendar_time() -> None:
+    local_timezone = timezone(timedelta(hours=3))
+    now = datetime(2026, 8, 12, 12, 50, tzinfo=local_timezone)
+
+    with pytest.raises(ValueError, match="ambiguous"):
+        manager_module.resolve_when(
+            {
+                "kind": "calendar",
+                "date_ref": "today",
+                "hour": "3",
+                "meridiem": "unspecified",
+            },
+            now,
+            local_timezone,
+        )
+    with pytest.raises(ValueError, match="future"):
+        manager_module.resolve_when(
+            {
+                "kind": "calendar",
+                "date_ref": "today",
+                "local_time": "09:00",
+            },
+            now,
+            local_timezone,
+        )
+
+
+def test_resolve_rejects_fields_for_the_wrong_time_kind() -> None:
+    local_timezone = timezone(timedelta(hours=3))
+    now = datetime(2026, 8, 12, 12, 50, tzinfo=local_timezone)
+
+    with pytest.raises(ValueError, match="cannot include calendar fields"):
+        manager_module.resolve_when(
+            {
+                "kind": "relative",
+                "duration": [{"value": "5", "unit": "minute"}],
+                "date_ref": "tomorrow",
+            },
+            now,
+            local_timezone,
+        )
+    with pytest.raises(ValueError, match="cannot include relative fields"):
+        manager_module.resolve_when(
+            {
+                "kind": "calendar",
+                "date_ref": "tomorrow",
+                "duration": [{"value": "5", "unit": "minute"}],
+                "local_time": "15:00",
+            },
+            now,
+            local_timezone,
+        )
+    with pytest.raises(ValueError, match="date_ref tomorrow cannot include"):
+        manager_module.resolve_when(
+            {
+                "kind": "calendar",
+                "date_ref": "tomorrow",
+                "weekday": "monday",
+                "local_time": "15:00",
+            },
+            now,
+            local_timezone,
+        )
+
+
+def test_resolve_rejects_nonexistent_dst_time() -> None:
+    try:
+        local_timezone = ZoneInfo("Europe/Berlin")
+    except ZoneInfoNotFoundError:
+        pytest.skip("system timezone data is not installed")
+    now = datetime(2026, 3, 28, 12, 0, tzinfo=local_timezone)
+
+    with pytest.raises(ValueError, match="does not exist"):
+        manager_module.resolve_when(
+            {
+                "kind": "calendar",
+                "date_ref": "tomorrow",
+                "local_time": "02:30",
+            },
+            now,
+            local_timezone,
+        )
+
+
+def test_tool_schemas_require_when_and_reject_due_at() -> None:
+    vol = pytest.importorskip("voluptuous")
+    llm_tools_module = importlib.import_module(f"{_PACKAGE_NAME}.llm_tools")
+    valid_create = {
+        "message": "call",
+        "when": {
+            "kind": "relative",
+            "duration": [{"value": "5", "unit": "minute"}],
+        },
+    }
+    assert llm_tools_module.CreateReminderTool.parameters(valid_create) == valid_create
+
+    with pytest.raises(vol.Invalid):
+        llm_tools_module.CreateReminderTool.parameters(
+            {"message": "call", "due_at": "2026-08-12T13:00:00+03:00"}
+        )
+    with pytest.raises(vol.Invalid):
+        llm_tools_module.UpdateReminderTool.parameters(
+            {
+                "reminder_id": "reminder_test",
+                "due_at": "2026-08-12T13:00:00+03:00",
+            }
+        )
+
+
+def test_tool_descriptions_explain_the_structured_time_contract() -> None:
+    pytest.importorskip("voluptuous")
+    llm_tools_module = importlib.import_module(f"{_PACKAGE_NAME}.llm_tools")
+
+    assert "relative interval or calendar expression" in (
+        llm_tools_module.CreateReminderTool.description
+    )
+    assert "absolute timestamp" in llm_tools_module.CreateReminderTool.description
+    assert "same relative or calendar contract" in (
+        llm_tools_module.UpdateReminderTool.description
+    )
 
 
 async def _fake_delivery(reminder_id: str) -> None:

@@ -1,20 +1,15 @@
 <reminder_tools_policy>
-These rules apply only to reminder tools.
+Use reminder tools for one-time persistent reminders.
 
-Use reminder tools only for one-time persistent reminders.
-Use native Home Assistant timer tools for countdowns.
+Call `create_reminder` with message and structured `when`. For
+`update_reminder`, send the reminder id and changed fields only. Use `relative`
+for intervals and `calendar` for dates or times.
 
-Keep reminder messages in the user's language.
-A reminder requires a message and a due time when applicable.
-If either is missing, ask one concise question ending with `?`.
+Never calculate or send `due_at`, timestamps, timezone offsets, or native timers.
+Home Assistant resolves `when` using current time and timezone.
 
-Convert relative time to an absolute ISO-8601/RFC3339 due_at in the Home Assistant
-timezone.
-due_at must always include a timezone offset.
-Never send a timezone-less due_at.
-
-If time remains ambiguous, ask one concise question ending with `?`.
-If update or cancellation matches multiple reminders, ask the user to clarify.
-If a reminder tool fails, report the error and do not claim success.
-After success, return one short confirmation and do not ask a question.
+Ask one concise clarification ending with `?` if time is missing, ambiguous,
+or an update/cancellation has multiple matches. On tool error, report it and
+never claim success. After success, briefly confirm without a question. Reply
+in the user's language.
 </reminder_tools_policy>
