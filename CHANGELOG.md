@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/klonwar/home-assistant-llm-reminders/compare/v0.3.0...v0.4.0) (2026-08-12)
+
+
+### Features
+
+* migrate to relative time in tools ([c6f91fc](https://github.com/klonwar/home-assistant-llm-reminders/commit/c6f91fcb75fafe880e6d2286069a2bc8bc3eb1f6))
+
 ## [0.3.0](https://github.com/klonwar/home-assistant-llm-reminders/compare/v0.2.0...v0.3.0) (2026-08-10)
 
 
