@@ -4,8 +4,8 @@
 
 `base.txt` is an optional prompt fragment returned through Home Assistant's
 `LLMTools.prompt`. It is inserted into an already substantial system prompt,
-so it must contain policy only, not a copy of the tool schema or a catalogue
-of natural-language examples.
+so it must contain policy and the smallest extraction rules needed to avoid
+provider mistakes.
 
 ## Runtime policy
 
@@ -14,12 +14,15 @@ The agreed base prompt is:
 ```text
 Use reminder tools for one-time persistent reminders.
 
-Call create_reminder with message and structured when. For update_reminder,
-send the reminder id and changed fields only. Use relative for intervals and
-calendar for dates or times.
+Call create_reminder with message and structured when. Extract fields only:
+use duration for intervals, local_time for clock times, and date or weekday
+only when the user states a date. If no date is stated, omit date; the server
+chooses the nearest future occurrence. For update_reminder, send the reminder
+id and changed fields only.
 
-Never calculate or send due_at, timestamps, timezone offsets, or native timers.
-Home Assistant resolves when using current time and timezone.
+Never calculate or send due_at, kind, date_ref, timestamps, timezone offsets,
+or native timers. Never call date/time tools to resolve a reminder. Home
+Assistant resolves when using current time and timezone.
 
 Ask one concise clarification ending with `?` if time is missing, ambiguous,
 or an update/cancellation has multiple matches. On tool error, report it and
@@ -32,8 +35,12 @@ behaviors:
 
 - use the reminder tools for persistent one-time reminders;
 - pass a structured `when` object when creating or changing a reminder time;
+- extract only duration and literal calendar fields; do not choose `kind` or
+  `date_ref`;
 - require both message and `when` for creation, but only changed fields for an
   update;
+- omit a date when the user gave only a time so the server can choose the
+  nearest future occurrence;
 - never generate `due_at` or another absolute timestamp;
 - leave date arithmetic and timezone handling to Home Assistant;
 - clarify incomplete or ambiguous time expressions with a response ending in
@@ -45,11 +52,10 @@ behaviors:
 
 ## What does not belong here
 
-Do not repeat field definitions, enum values, JSON examples, provider-specific
-syntax, current date/time, timezone data, device data, or reminder history.
-Those belong in the tool schema, tool descriptions, integration code, tests,
-or design documentation. Native Home Assistant timers are also outside this
-prompt's scope.
+Do not repeat the complete field catalogue, provider-specific syntax, current
+date/time, timezone data, device data, or reminder history. The tool schema and
+description carry the full field definitions and examples. Native Home
+Assistant timers are also outside this prompt's scope.
 
 ## Language strategy
 
@@ -61,8 +67,9 @@ problem that cannot be solved by the schema or resolver error message.
 
 ## Decision log
 
-1. **Keep policy separate from the API contract.** The base prompt is short;
-   schema and descriptions carry the machine-readable format.
+1. **Keep policy separate from the full API contract.** The base prompt carries
+   the extraction rules; schema and descriptions carry field definitions and
+   examples.
 2. **Do not provide current time to the model as a dependency.** Home
    Assistant's resolver is the authority for the current instant and timezone.
 3. **Use one language-neutral base.** Duplicated language additions would

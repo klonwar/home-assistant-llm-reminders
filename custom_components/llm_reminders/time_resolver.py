@@ -40,33 +40,116 @@ _WEEKDAY_NUMBERS = {
 _CALENDAR_TIME_FIELDS = frozenset(
     {"local_time", "day_period", "hour", "meridiem"}
 )
+_CALENDAR_DATE_FIELDS = frozenset(
+    {"date", "weekday", "month", "day_of_month"}
+)
+_CALENDAR_INPUT_FIELDS = _CALENDAR_DATE_FIELDS | _CALENDAR_TIME_FIELDS
+_WHEN_INPUT_FIELDS = frozenset({"duration", "target_time"}) | _CALENDAR_INPUT_FIELDS
+_DATE_TOKENS = frozenset({"today", "tomorrow", "day_after_tomorrow"})
 _CALENDAR_REFERENCE_FIELDS = {
     "today": frozenset(),
     "tomorrow": frozenset(),
     "day_after_tomorrow": frozenset(),
-    "weekday": frozenset({"weekday", "occurrence"}),
-    "next_weekday": frozenset({"weekday", "occurrence"}),
-    "day_of_month": frozenset({"day_of_month", "month_ref"}),
-    "month_day": frozenset({"month", "day_of_month", "year_ref"}),
+    "weekday": frozenset({"weekday"}),
+    "day_of_month": frozenset({"day_of_month"}),
+    "month_day": frozenset({"month", "day_of_month"}),
     "explicit": frozenset({"date_value"}),
     "nearest_future": frozenset(),
 }
-_RELATIVE_FORBIDDEN_FIELDS = frozenset(
-    {
-        "date_ref",
-        "occurrence",
-        "weekday",
-        "month_ref",
-        "month",
-        "year_ref",
-        "day_of_month",
-        "date_value",
-        "local_time",
-        "day_period",
-        "hour",
-        "meridiem",
+
+
+def normalize_when(when: Mapping[str, Any]) -> dict[str, Any]:
+    """Infer the internal time kind and calendar reference from user fields."""
+    if not isinstance(when, Mapping):
+        raise ValueError("The reminder time must be a structured object")
+
+    unsupported = sorted(set(when) - _WHEN_INPUT_FIELDS)
+    if unsupported:
+        fields = ", ".join(unsupported)
+        raise ValueError(f"The reminder time contains unsupported fields: {fields}")
+
+    has_duration = "duration" in when
+    has_calendar_fields = bool(set(when).intersection(_CALENDAR_INPUT_FIELDS))
+    if has_duration and has_calendar_fields:
+        raise ValueError("A reminder cannot mix duration and calendar fields")
+    if has_duration:
+        normalized: dict[str, Any] = {
+            "kind": "relative",
+            "duration": when.get("duration"),
+        }
+        if "target_time" in when:
+            normalized["target_time"] = when.get("target_time")
+        return normalized
+    if "target_time" in when:
+        raise ValueError("target_time requires duration")
+    if not has_calendar_fields:
+        raise ValueError("Provide duration or a calendar time")
+
+    normalized = {"kind": "calendar"}
+    _copy_calendar_time_fields(when, normalized)
+    _add_calendar_reference(when, normalized)
+    return normalized
+
+
+def _copy_calendar_time_fields(
+    when: Mapping[str, Any], normalized: dict[str, Any]
+) -> None:
+    for field in _CALENDAR_TIME_FIELDS:
+        if field in when:
+            normalized[field] = when[field]
+
+
+def _add_calendar_reference(
+    when: Mapping[str, Any], normalized: dict[str, Any]
+) -> None:
+    date_value = when.get("date")
+    weekday = when.get("weekday")
+    month = when.get("month")
+    day_of_month = when.get("day_of_month")
+    date_fields = {
+        field
+        for field, value in (
+            ("date", date_value),
+            ("weekday", weekday),
+            ("month", month),
+            ("day_of_month", day_of_month),
+        )
+        if value is not None
     }
-)
+
+    if date_value is not None:
+        if len(date_fields) != 1:
+            raise ValueError("date cannot be combined with other date fields")
+        date_text = _text(date_value)
+        if date_text in _DATE_TOKENS:
+            normalized["date_ref"] = date_text
+            return
+        if _DATE_PATTERN.fullmatch(date_text) is None:
+            raise ValueError(
+                "date must be today, tomorrow, day_after_tomorrow, or YYYY-MM-DD"
+            )
+        normalized["date_ref"] = "explicit"
+        normalized["date_value"] = date_text
+        return
+
+    if weekday is not None:
+        if len(date_fields) != 1:
+            raise ValueError("weekday cannot be combined with other date fields")
+        normalized["date_ref"] = "weekday"
+        normalized["weekday"] = weekday
+        return
+
+    if day_of_month is not None:
+        normalized["date_ref"] = "month_day" if month is not None else "day_of_month"
+        normalized["day_of_month"] = day_of_month
+        if month is not None:
+            normalized["month"] = month
+        return
+
+    if month is not None:
+        raise ValueError("month requires day_of_month")
+
+    normalized["date_ref"] = "nearest_future"
 
 
 def resolve_when(
@@ -75,16 +158,15 @@ def resolve_when(
     local_timezone: tzinfo,
 ) -> datetime:
     """Resolve a structured ``when`` value using the Home Assistant clock."""
-    if not isinstance(when, Mapping):
-        raise ValueError("The reminder time must be a structured object")
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("The current time must include a timezone")
 
-    kind = _required_text(when, "kind")
+    normalized = normalize_when(when)
+    kind = normalized["kind"]
     if kind == "relative":
-        return _resolve_relative(when, now, local_timezone)
+        return _resolve_relative(normalized, now, local_timezone)
     if kind == "calendar":
-        return _resolve_calendar(when, now, local_timezone)
+        return _resolve_calendar(normalized, now, local_timezone)
     raise ValueError("The reminder time kind must be relative or calendar")
 
 
@@ -95,7 +177,7 @@ def _resolve_relative(
 ) -> datetime:
     _reject_fields(
         when,
-        _RELATIVE_FORBIDDEN_FIELDS,
+        _CALENDAR_INPUT_FIELDS,
         "A relative reminder cannot include calendar fields",
     )
     duration = when.get("duration")
@@ -172,8 +254,8 @@ def _resolve_calendar(
             now,
             local_timezone,
         )
-    if date_ref in {"weekday", "next_weekday"}:
-        return _resolve_weekday(when, local_now, now, local_timezone, times, date_ref)
+    if date_ref == "weekday":
+        return _resolve_weekday(when, local_now, now, local_timezone, times)
     if date_ref == "day_of_month":
         return _resolve_day_of_month(when, local_now, now, local_timezone, times)
     if date_ref == "month_day":
@@ -200,19 +282,13 @@ def _resolve_weekday(
     now: datetime,
     local_timezone: tzinfo,
     times: list[tuple[int, int]],
-    date_ref: str,
 ) -> datetime:
     weekday_name = _required_text(when, "weekday")
     if weekday_name not in _WEEKDAY_NUMBERS:
         raise ValueError("The weekday is not supported")
-    occurrence = _text(when.get("occurrence"))
-    if occurrence not in ("", "nearest_future", "next"):
-        raise ValueError("The weekday occurrence is not supported")
     target_weekday = _WEEKDAY_NUMBERS[weekday_name]
     current_weekday = local_now.date().weekday()
     days_ahead = (target_weekday - current_weekday) % 7
-    if date_ref == "next_weekday" or occurrence == "next":
-        days_ahead = days_ahead or 7
 
     first_date = local_now.date() + timedelta(days=days_ahead)
     return _select_future(
@@ -231,9 +307,6 @@ def _resolve_day_of_month(
     times: list[tuple[int, int]],
 ) -> datetime:
     day = _positive_integer(when.get("day_of_month"), "day_of_month")
-    month_ref = _text(when.get("month_ref")) or "nearest_future"
-    if month_ref != "nearest_future":
-        raise ValueError("The month_ref must be nearest_future")
 
     candidates: list[date] = []
     year = local_now.year
@@ -256,9 +329,6 @@ def _resolve_month_day(
     day = _positive_integer(when.get("day_of_month"), "day_of_month")
     if month > 12:
         raise ValueError("The month must be between 1 and 12")
-    year_ref = _text(when.get("year_ref")) or "nearest_future"
-    if year_ref != "nearest_future":
-        raise ValueError("The year_ref must be nearest_future")
 
     candidates: list[date] = []
     for year in (local_now.year, local_now.year + 1):
@@ -355,11 +425,11 @@ def _parse_clock(value: object) -> tuple[int, int]:
 def _parse_date(value: object) -> date:
     text = _text(value)
     if _DATE_PATTERN.fullmatch(text) is None:
-        raise ValueError("date_value must use YYYY-MM-DD")
+        raise ValueError("date must use YYYY-MM-DD")
     try:
         return datetime.strptime(text, "%Y-%m-%d").date()
     except ValueError as err:
-        raise ValueError("date_value is not a valid date") from err
+        raise ValueError("date is not a valid date") from err
 
 
 def _required_text(mapping: Mapping[str, Any], key: str) -> str:

@@ -21,7 +21,7 @@ calls are validated against the schema before the integration receives them.
 | Tool purpose and call timing | `Tool.description` |
 | Field names, types, enums, basic requiredness | `Tool.parameters` |
 | Universal behavior rules | `prompts/base.txt` |
-| Kind-specific field combinations | Integration semantic validation |
+| Field combinations and date inference | Integration semantic validation |
 | Current time and timezone | Home Assistant resolver |
 | Final `due_at` and scheduling | Manager/storage layer |
 | Full examples and design rationale | `docs/` and tests |
@@ -33,11 +33,13 @@ the non-negotiable prohibition on model-generated timestamps.
 
 ## Tool description
 
-`create_reminder` should communicate only its purpose and the key invariant:
+`create_reminder` should communicate the extraction task and the key invariant:
 
 ```text
-Create a one-time reminder. Put the user's time intent in when as a relative
-interval or calendar expression. Do not calculate an absolute timestamp.
+Create a one-time reminder by extracting time fields only. Use duration for
+"in 5 minutes", local_time for "at 14:50", and date plus local_time for
+"tomorrow at 14:50". Omit date when none was spoken; the server chooses the
+nearest future occurrence. Do not send kind, date_ref, or absolute timestamps.
 ```
 
 `update_reminder` uses the same `when` contract when its time is changed, but
@@ -47,26 +49,35 @@ rules.
 
 ## `when` shape
 
-Use one `when` object with a `kind` discriminator:
+Use one field-first `when` object. The model does not choose a `kind` or
+`date_ref`; the server infers both from the populated fields:
 
 ```json
-{"kind":"relative","duration":[{"value":"5","unit":"minute"}]}
+{"duration":[{"value":"5","unit":"minute"}]}
 ```
 
 ```json
-{"kind":"calendar","date_ref":"day_of_month","day_of_month":"15","month_ref":"nearest_future","local_time":"13:00"}
+{"local_time":"14:50"}
 ```
 
-Keep the shape flat and avoid requiring top-level `oneOf`/`anyOf` constructs.
-This is more portable across provider adapters. The integration checks that
-relative-only and calendar-only fields are used with the matching `kind`.
+```json
+{"date":"tomorrow","local_time":"14:50"}
+```
+
+Calendar fields are `date`, `weekday`, `day_of_month`, `month`, `local_time`,
+`day_period`, `hour`, and `meridiem`. `date` is `today`, `tomorrow`,
+`day_after_tomorrow`, or an ISO date. If no date field is present, Home
+Assistant selects the nearest future occurrence. The integration rejects
+mixed relative/calendar fields and unknown internal fields.
 
 ## Provider independence
 
 The design does not depend on a provider exposing the current date, current
 time, or timezone. Relative requests contain an interval; calendar requests
-contain semantic references such as `tomorrow`, `weekday`, or
-`day_of_month`. Home Assistant resolves those references after the tool call.
+contain only literal extracted fields such as `tomorrow`, `weekday`, or
+`day_of_month`. Home Assistant infers the date reference and resolves it after
+the tool call. The model must not call a date/time tool to fill in an omitted
+date.
 
 After implementation, inspect Assist traces for each supported provider to
 verify that the tool name, schema, and `when` payload are actually exposed.
@@ -87,7 +98,8 @@ same way.
    Repeating the full contract in `base.txt` wastes system-prompt tokens.
 2. **Keep one create tool.** Separate relative/calendar tools would reduce
    each schema but increase tool selection and update complexity.
-3. **Prefer a flat discriminator.** It avoids provider incompatibilities with
-   complex JSON Schema while retaining a single stable public contract.
+3. **Use field-first extraction instead of a discriminator.** The provider
+   only maps user words to obvious fields; the server owns kind and date
+   inference.
 4. **Validate twice.** Schema validation handles structure; semantic
    validation prevents invalid combinations and unsafe date resolution.

@@ -121,6 +121,7 @@ _package = types.ModuleType(_PACKAGE_NAME)
 _package.__path__ = [str(INTEGRATION_DIR)]
 sys.modules[_PACKAGE_NAME] = _package
 manager_module = importlib.import_module(f"{_PACKAGE_NAME}.manager")
+time_resolver_module = importlib.import_module(f"{_PACKAGE_NAME}.time_resolver")
 
 
 class _FakeState:
@@ -262,9 +263,7 @@ def test_create_resolves_calendar_when(caplog: pytest.LogCaptureFixture) -> None
         manager.async_create(
             message="buy bread",
             when={
-                "kind": "calendar",
-                "date_ref": "explicit",
-                "date_value": "2099-08-01",
+                "date": "2099-08-01",
                 "local_time": "19:00",
             },
             device_id=None,
@@ -275,7 +274,7 @@ def test_create_resolves_calendar_when(caplog: pytest.LogCaptureFixture) -> None
     assert reminder["due_at"].endswith("+03:00")
     assert "async_create called" in caplog.text
     assert "message='buy bread'" in caplog.text
-    assert "when={'kind': 'calendar'" in caplog.text
+    assert "when={'date': '2099-08-01'" in caplog.text
     assert "async_create result" in caplog.text
     assert "due_at=2099-08-01T19:00:00+03:00" in caplog.text
 
@@ -290,9 +289,7 @@ def test_update_resolves_calendar_when() -> None:
         manager.async_update(
             reminder_id=reminder["id"],
             when={
-                "kind": "calendar",
-                "date_ref": "explicit",
-                "date_value": "2099-08-01",
+                "date": "2099-08-01",
                 "local_time": "19:00",
             },
         )
@@ -315,9 +312,7 @@ def test_update_clears_pending_retry_before_rescheduling() -> None:
         manager.async_update(
             reminder_id=reminder["id"],
             when={
-                "kind": "calendar",
-                "date_ref": "explicit",
-                "date_value": "2099-08-01",
+                "date": "2099-08-01",
                 "local_time": "19:00",
             },
         )
@@ -343,13 +338,33 @@ def test_cancel_clears_pending_retry() -> None:
     assert reminder["id"] not in manager._retry_scheduled
 
 
+def test_normalize_when_infers_relative_and_calendar_shapes() -> None:
+    assert time_resolver_module.normalize_when(
+        {"duration": [{"value": "5", "unit": "minute"}]}
+    ) == {
+        "kind": "relative",
+        "duration": [{"value": "5", "unit": "minute"}],
+    }
+    assert time_resolver_module.normalize_when({"local_time": "14:50"}) == {
+        "kind": "calendar",
+        "date_ref": "nearest_future",
+        "local_time": "14:50",
+    }
+    assert time_resolver_module.normalize_when(
+        {"date": "tomorrow", "local_time": "14:50"}
+    ) == {
+        "kind": "calendar",
+        "date_ref": "tomorrow",
+        "local_time": "14:50",
+    }
+
+
 def test_resolve_relative_duration_uses_home_assistant_now() -> None:
     local_timezone = timezone(timedelta(hours=3))
     now = datetime(2026, 8, 12, 12, 50, tzinfo=local_timezone)
 
     due = manager_module.resolve_when(
         {
-            "kind": "relative",
             "duration": [{"value": "5", "unit": "minute"}],
         },
         now,
@@ -365,7 +380,6 @@ def test_resolve_composed_relative_duration_with_target_time() -> None:
 
     due = manager_module.resolve_when(
         {
-            "kind": "relative",
             "duration": [{"value": "1", "unit": "week"}],
             "target_time": "15:00",
         },
@@ -381,37 +395,28 @@ def test_resolve_composed_relative_duration_with_target_time() -> None:
     [
         (
             {
-                "kind": "calendar",
-                "date_ref": "tomorrow",
+                "date": "tomorrow",
                 "local_time": "15:00",
             },
             datetime(2026, 8, 13, 15, tzinfo=timezone(timedelta(hours=3))),
         ),
         (
             {
-                "kind": "calendar",
-                "date_ref": "day_of_month",
                 "day_of_month": "15",
-                "month_ref": "nearest_future",
                 "local_time": "13:00",
             },
             datetime(2026, 8, 15, 13, tzinfo=timezone(timedelta(hours=3))),
         ),
         (
             {
-                "kind": "calendar",
-                "date_ref": "month_day",
                 "month": "7",
                 "day_of_month": "15",
-                "year_ref": "nearest_future",
                 "local_time": "13:00",
             },
             datetime(2027, 7, 15, 13, tzinfo=timezone(timedelta(hours=3))),
         ),
         (
             {
-                "kind": "calendar",
-                "date_ref": "weekday",
                 "weekday": "monday",
                 "local_time": "09:00",
             },
@@ -419,8 +424,6 @@ def test_resolve_composed_relative_duration_with_target_time() -> None:
         ),
         (
             {
-                "kind": "calendar",
-                "date_ref": "nearest_future",
                 "local_time": "15:00",
             },
             datetime(2026, 8, 12, 15, tzinfo=timezone(timedelta(hours=3))),
@@ -434,14 +437,22 @@ def test_resolve_calendar_references(when: dict[str, Any], expected: datetime) -
     assert manager_module.resolve_when(when, now, local_timezone) == expected
 
 
+def test_time_without_date_uses_tomorrow_after_time_passes() -> None:
+    local_timezone = timezone(timedelta(hours=3))
+    now = datetime(2026, 8, 12, 15, 50, tzinfo=local_timezone)
+
+    assert manager_module.resolve_when(
+        {"local_time": "14:50"}, now, local_timezone
+    ) == datetime(2026, 8, 13, 14, 50, tzinfo=local_timezone)
+
+
 def test_resolve_day_period_and_ambiguous_eight() -> None:
     local_timezone = timezone(timedelta(hours=3))
     now = datetime(2026, 8, 12, 12, 50, tzinfo=local_timezone)
 
     assert manager_module.resolve_when(
         {
-            "kind": "calendar",
-            "date_ref": "tomorrow",
+            "date": "tomorrow",
             "day_period": "morning",
         },
         now,
@@ -449,8 +460,7 @@ def test_resolve_day_period_and_ambiguous_eight() -> None:
     ) == datetime(2026, 8, 13, 9, tzinfo=local_timezone)
     assert manager_module.resolve_when(
         {
-            "kind": "calendar",
-            "date_ref": "today",
+            "date": "today",
             "hour": "8",
             "meridiem": "unspecified",
         },
@@ -466,8 +476,7 @@ def test_resolve_rejects_ambiguous_or_past_calendar_time() -> None:
     with pytest.raises(ValueError, match="ambiguous"):
         manager_module.resolve_when(
             {
-                "kind": "calendar",
-                "date_ref": "today",
+                "date": "today",
                 "hour": "3",
                 "meridiem": "unspecified",
             },
@@ -477,8 +486,7 @@ def test_resolve_rejects_ambiguous_or_past_calendar_time() -> None:
     with pytest.raises(ValueError, match="future"):
         manager_module.resolve_when(
             {
-                "kind": "calendar",
-                "date_ref": "today",
+                "date": "today",
                 "local_time": "09:00",
             },
             now,
@@ -486,39 +494,41 @@ def test_resolve_rejects_ambiguous_or_past_calendar_time() -> None:
         )
 
 
-def test_resolve_rejects_fields_for_the_wrong_time_kind() -> None:
+def test_resolve_rejects_mixed_or_conflicting_time_fields() -> None:
     local_timezone = timezone(timedelta(hours=3))
     now = datetime(2026, 8, 12, 12, 50, tzinfo=local_timezone)
 
-    with pytest.raises(ValueError, match="cannot include calendar fields"):
+    with pytest.raises(ValueError, match="cannot mix duration and calendar"):
         manager_module.resolve_when(
             {
-                "kind": "relative",
-                "duration": [{"value": "5", "unit": "minute"}],
-                "date_ref": "tomorrow",
-            },
-            now,
-            local_timezone,
-        )
-    with pytest.raises(ValueError, match="cannot include relative fields"):
-        manager_module.resolve_when(
-            {
-                "kind": "calendar",
-                "date_ref": "tomorrow",
                 "duration": [{"value": "5", "unit": "minute"}],
                 "local_time": "15:00",
             },
             now,
             local_timezone,
         )
-    with pytest.raises(ValueError, match="date_ref tomorrow cannot include"):
+    with pytest.raises(ValueError, match="date cannot be combined"):
         manager_module.resolve_when(
             {
-                "kind": "calendar",
-                "date_ref": "tomorrow",
+                "date": "tomorrow",
                 "weekday": "monday",
                 "local_time": "15:00",
             },
+            now,
+            local_timezone,
+        )
+    with pytest.raises(ValueError, match="month requires day_of_month"):
+        manager_module.resolve_when(
+            {
+                "month": "8",
+                "local_time": "15:00",
+            },
+            now,
+            local_timezone,
+        )
+    with pytest.raises(ValueError, match="unsupported fields: kind"):
+        manager_module.resolve_when(
+            {"kind": "calendar", "local_time": "15:00"},
             now,
             local_timezone,
         )
@@ -534,8 +544,7 @@ def test_resolve_rejects_nonexistent_dst_time() -> None:
     with pytest.raises(ValueError, match="does not exist"):
         manager_module.resolve_when(
             {
-                "kind": "calendar",
-                "date_ref": "tomorrow",
+                "date": "tomorrow",
                 "local_time": "02:30",
             },
             now,
@@ -543,21 +552,28 @@ def test_resolve_rejects_nonexistent_dst_time() -> None:
         )
 
 
-def test_tool_schemas_require_when_and_reject_due_at() -> None:
+def test_tool_schemas_accept_minimal_when_and_reject_internal_fields() -> None:
     vol = pytest.importorskip("voluptuous")
     llm_tools_module = importlib.import_module(f"{_PACKAGE_NAME}.llm_tools")
     valid_create = {
         "message": "call",
-        "when": {
-            "kind": "relative",
-            "duration": [{"value": "5", "unit": "minute"}],
-        },
+        "when": {"local_time": "14:50"},
     }
     assert llm_tools_module.CreateReminderTool.parameters(valid_create) == valid_create
 
     with pytest.raises(vol.Invalid):
         llm_tools_module.CreateReminderTool.parameters(
-            {"message": "call", "due_at": "2026-08-12T13:00:00+03:00"}
+            {
+                "message": "call",
+                "when": {"kind": "calendar", "local_time": "14:50"},
+            }
+        )
+    with pytest.raises(vol.Invalid):
+        llm_tools_module.CreateReminderTool.parameters(
+            {
+                "message": "call",
+                "when": {"date_ref": "tomorrow", "local_time": "14:50"},
+            }
         )
     with pytest.raises(vol.Invalid):
         llm_tools_module.UpdateReminderTool.parameters(
@@ -566,17 +582,25 @@ def test_tool_schemas_require_when_and_reject_due_at() -> None:
                 "due_at": "2026-08-12T13:00:00+03:00",
             }
         )
+    with pytest.raises(vol.Invalid):
+        llm_tools_module.UpdateReminderTool.parameters(
+            {
+                "reminder_id": "reminder_test",
+                "when": {"kind": "calendar", "local_time": "14:50"},
+            }
+        )
 
 
 def test_tool_descriptions_explain_the_structured_time_contract() -> None:
     pytest.importorskip("voluptuous")
     llm_tools_module = importlib.import_module(f"{_PACKAGE_NAME}.llm_tools")
 
-    assert "relative interval or calendar expression" in (
+    assert "duration for 'in 5 minutes'" in (
         llm_tools_module.CreateReminderTool.description
     )
-    assert "absolute timestamp" in llm_tools_module.CreateReminderTool.description
-    assert "same relative or calendar contract" in (
+    assert "nearest future occurrence" in llm_tools_module.CreateReminderTool.description
+    assert "Do not send kind, date_ref" in llm_tools_module.CreateReminderTool.description
+    assert "same field-only extraction" in (
         llm_tools_module.UpdateReminderTool.description
     )
 

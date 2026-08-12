@@ -12,8 +12,9 @@ started the request when Home Assistant exposes its device context.
 1. Use Home Assistant's official LLM API extension point instead of creating a
    second conversation agent or calling OpenRouter directly.
 2. Expose four logical tools: create, list, cancel, and update.
-3. Reminder time is normalized by the structured `when` contract and resolved
-   by Home Assistant; the provider does not calculate an absolute timestamp.
+3. Reminder time is normalized from field-first `when` components and resolved
+   by Home Assistant; the provider does not choose a kind or calculate an
+   absolute timestamp.
 4. Keep reminder storage and scheduling inside the integration. Do not rely on
    a user's YAML package, entity names, calendar helper, or speaker.
 5. Resolve the target satellite from `LLMContext.device_id` and fall back to a
@@ -27,8 +28,9 @@ started the request when Home Assistant exposes its device context.
 9. Keep native Home Assistant/LVA timer intents outside this reminder API.
 10. Treat the existing household-specific `voice_reminders.yaml` as a beta
     prototype, not a dependency of this package.
-11. Keep the runtime prompt short: the tool schema and descriptions carry the
-    machine-readable reminder contract; see
+11. Keep the runtime prompt focused: field extraction rules live in the prompt,
+    while the tool schema and descriptions carry the machine-readable reminder
+    contract; see
     [prompt-api-contract.md](prompt-api-contract.md).
 12. Resolve all relative and calendar expressions inside the integration using
     Home Assistant's current time and configured timezone.

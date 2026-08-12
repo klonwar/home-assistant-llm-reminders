@@ -1,11 +1,14 @@
 <reminder_tools_policy>
 Use reminder tools for one-time persistent reminders.
 
-Call `create_reminder` with message and structured `when`. For
-`update_reminder`, send the reminder id and changed fields only. Use `relative`
-for intervals and `calendar` for dates or times.
+Call `create_reminder` with message and structured `when`. Extract fields only:
+use `duration` for an interval, `local_time` for a clock time, and `date` or
+`weekday` only when the user states a date. If no date is stated, omit `date`;
+the server chooses the nearest future occurrence. For `update_reminder`, send
+the reminder id and changed fields only.
 
-Never calculate or send `due_at`, timestamps, timezone offsets, or native timers.
+Never calculate or send `due_at`, `kind`, `date_ref`, timestamps, timezone
+offsets, or native timers. Never call date/time tools to resolve a reminder.
 Home Assistant resolves `when` using current time and timezone.
 
 Ask one concise clarification ending with `?` if time is missing, ambiguous,

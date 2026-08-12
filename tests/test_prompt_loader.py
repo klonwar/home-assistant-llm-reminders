@@ -58,11 +58,11 @@ def test_prompt_forbids_model_timestamp_calculation() -> None:
 def test_prompt_keeps_the_runtime_policy_concise() -> None:
     catalog = _MODULE.load_prompt_catalog(PROMPTS_PATH)
 
-    assert len(catalog.base.split()) < 100
-    assert '"kind":"relative"' not in catalog.base
-    assert '"kind":"calendar"' not in catalog.base
-    assert "day_of_month" not in catalog.base
-    assert "month_day" not in catalog.base
+    assert len(catalog.base.split()) < 140
+    assert "duration" in catalog.base
+    assert "local_time" in catalog.base
+    assert "nearest future" in catalog.base
+    assert "kind" in catalog.base and "date_ref" in catalog.base
     assert "target_time" not in catalog.base
 
 
@@ -81,6 +81,14 @@ def test_prompt_preserves_tool_outcome_and_confirmation_policy() -> None:
     assert "never" in catalog.base and "claim success" in catalog.base
     assert "briefly confirm" in catalog.base
     assert "clarification ending with `?`" in catalog.base
+
+
+def test_prompt_uses_server_time_normalization() -> None:
+    catalog = _MODULE.load_prompt_catalog(PROMPTS_PATH)
+
+    assert "Never call date/time tools" in catalog.base
+    assert "omit `date`" in catalog.base
+    assert "Extract fields only" in catalog.base
 
 
 def test_prompt_loader_rejects_text_outside_policy_block(tmp_path: Path) -> None:

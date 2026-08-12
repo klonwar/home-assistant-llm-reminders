@@ -33,10 +33,6 @@ _DURATION_SCHEMA = vol.Schema(
 )
 _WHEN_SCHEMA = vol.Schema(
     {
-        vol.Required(
-            "kind",
-            description="Use relative for an interval or calendar for a date/time.",
-        ): vol.In(("relative", "calendar")),
         vol.Optional(
             "duration",
             description="One or more relative duration components.",
@@ -46,46 +42,21 @@ _WHEN_SCHEMA = vol.Schema(
             description="Local HH:MM after a whole-day or whole-week interval.",
         ): cv.string,
         vol.Optional(
-            "date_ref",
-            description="Semantic calendar reference for a calendar reminder.",
-        ): vol.In(
-            (
-                "today",
-                "tomorrow",
-                "day_after_tomorrow",
-                "weekday",
-                "next_weekday",
-                "day_of_month",
-                "month_day",
-                "explicit",
-                "nearest_future",
-            )
-        ),
-        vol.Optional(
-            "occurrence",
-            description="For weekdays, use next or nearest_future.",
-        ): vol.In(("nearest_future", "next")),
+            "date",
+            description=(
+                "Use today, tomorrow, day_after_tomorrow, or YYYY-MM-DD; "
+                "omit when the user gives only a time."
+            ),
+        ): cv.string,
         vol.Optional(
             "weekday", description="Canonical English weekday name."
         ): cv.string,
         vol.Optional(
-            "month_ref",
-            description="Use nearest_future for a day-of-month reference.",
-        ): vol.In(("nearest_future",)),
-        vol.Optional(
             "month", description="Month number from 1 to 12."
         ): cv.string,
         vol.Optional(
-            "year_ref",
-            description="Use nearest_future for a month/day reference.",
-        ): vol.In(("nearest_future",)),
-        vol.Optional(
             "day_of_month",
             description="Day number from 1 to 31.",
-        ): cv.string,
-        vol.Optional(
-            "date_value",
-            description="Explicit date in YYYY-MM-DD format.",
         ): cv.string,
         vol.Optional(
             "local_time", description="Local clock time in HH:MM."
@@ -153,16 +124,23 @@ class CreateReminderTool(llm.Tool):
 
     name = "create_reminder"
     description = (
-        "Create a one-time reminder. Put the user's time intent in when as a "
-        "relative interval or calendar expression. Do not calculate an "
-        "absolute timestamp."
+        "Create a one-time reminder by extracting time fields only. Use "
+        "duration for 'in 5 minutes', local_time for 'at 14:50', and date "
+        "plus local_time for 'tomorrow at 14:50'. Omit date when none was "
+        "spoken; the server chooses the nearest future occurrence. Do not "
+        "send kind, date_ref, timestamps, or call date/time tools."
+        " Examples: {\"duration\":[{\"value\":\"5\",\"unit\":\"minute\"}]} "
+        "or {\"local_time\":\"14:50\"}."
     )
     parameters = vol.Schema(
         {
             vol.Required("message", description="Reminder text."): cv.string,
             vol.Required(
                 "when",
-                description="Structured relative or calendar reminder time.",
+                description=(
+                    "Extract duration or calendar fields. Do not add kind or "
+                    "date_ref."
+                ),
             ): _WHEN_SCHEMA,
         }
     )
@@ -234,8 +212,13 @@ class UpdateReminderTool(llm.Tool):
 
     name = "update_reminder"
     description = (
-        "Change the text or structured time of one reminder by id. The when "
-        "value uses the same relative or calendar contract as create_reminder."
+        "Change the text or time of one reminder by id. The when value uses "
+        "the same field-only extraction as create_reminder: duration for an "
+        "interval, local_time for a clock time, and optional date for a stated "
+        "date. Omit date when none was spoken; the server chooses the nearest "
+        "future occurrence. Do not send kind, date_ref, timestamps, or call "
+        "date/time tools. Use the same duration/local_time/date fields as "
+        "create_reminder."
     )
     parameters = vol.Schema(
         {
@@ -245,7 +228,9 @@ class UpdateReminderTool(llm.Tool):
             vol.Optional("message", description="New reminder text."): cv.string,
             vol.Optional(
                 "when",
-                description="New structured relative or calendar reminder time.",
+                description=(
+                    "New duration or calendar fields; omit kind and date_ref."
+                ),
             ): _WHEN_SCHEMA,
         }
     )

@@ -113,19 +113,21 @@ Keep your existing system prompt and add equivalent instructions for reminders:
 ```text
 Use reminder tools for one-time spoken reminders.
 Always send `message` and a structured `when` object; never send or calculate
-`due_at`. Use `when.kind=relative` with string `value` and `unit` fields for
-phrases such as “через пять минут”, or `when.kind=calendar` for phrases such
-as “завтра в 15:00”. Ask concise follow-up questions when time is missing or
-ambiguous. Do not claim success if a tool reports an error. If several
-reminders match a cancellation or update request, ask the user to clarify.
+`due_at`. Use `duration` for phrases such as “через пять минут”, or
+`local_time` plus an optional `date` for phrases such as “завтра в 15:00”. If
+the user gives only a time, omit `date`; the server selects the nearest future
+occurrence. Do not send `kind` or `date_ref`, call date/time tools, or claim
+success if a tool reports an error. If several reminders match a cancellation
+or update request, ask the user to clarify.
 ```
 
 ## Time interpretation
 
 Relative and calendar phrases are resolved by Home Assistant using its current
-time and configured timezone. “Через пять минут” becomes a relative duration;
-“завтра в 15:00” becomes a calendar reference; “15-го числа в 13:00” becomes
-the nearest future day of month. If the user gives no time or the hour remains
+time and configured timezone. “Через пять минут” becomes a `duration` object;
+“завтра в 15:00” becomes `date` plus `local_time`; “15-го числа в 13:00”
+becomes `day_of_month` plus `local_time`. A time without a date uses the
+nearest future local date. If the user gives no time or the hour remains
 ambiguous, ask for clarification. Recurring phrases such as “каждый день” are
 not supported by the one-time reminder contract.
 
