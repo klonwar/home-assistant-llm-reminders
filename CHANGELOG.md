@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/klonwar/home-assistant-llm-reminders/compare/v0.4.1...v0.4.2) (2026-08-14)
+
+
+### Bug Fixes
+
+* release please beta support ([6581a5a](https://github.com/klonwar/home-assistant-llm-reminders/commit/6581a5a5aa7c50cf562a9dcc641f61010b24454b))
+
 ## [0.4.1](https://github.com/klonwar/home-assistant-llm-reminders/compare/v0.4.0...v0.4.1) (2026-08-12)
 
 
