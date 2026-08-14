@@ -84,4 +84,19 @@ def test_validation_skips_release_please_technical_branches() -> None:
 
     assert workflow.count("github.event_name == 'push'") == 2
     assert workflow.count("github.event_name == 'pull_request'") == 2
+    assert workflow.count(
+        "github.event.pull_request.head.repo.full_name == github.repository"
+    ) == 2
     assert workflow.count("${{ !(") == 2
+
+
+def test_validation_pushes_only_stable_and_beta_branches() -> None:
+    """Avoid validation runs for generated branches, feature branches, and tags."""
+    workflow = (ROOT / ".github" / "workflows" / "validate.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "  push:\n    branches:\n      - main\n      - beta\n" in workflow
+    assert "  pull_request:\n" in workflow
+    assert "  schedule:\n" in workflow
+    assert "  workflow_dispatch:\n" in workflow
