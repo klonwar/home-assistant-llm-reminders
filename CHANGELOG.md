@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.3-beta](https://github.com/klonwar/home-assistant-llm-reminders/compare/v0.4.2...v0.4.3-beta) (2026-08-14)
+
+
+### Bug Fixes
+
+* conversation router ([#7](https://github.com/klonwar/home-assistant-llm-reminders/issues/7)) ([7e82b83](https://github.com/klonwar/home-assistant-llm-reminders/commit/7e82b8305432438981b4abb8378e9d71134b47e8))
+* disable validation in release please ([3ff21ef](https://github.com/klonwar/home-assistant-llm-reminders/commit/3ff21ef106af1778041434ca1e9117d73daff516))
+* promotion ([15476e0](https://github.com/klonwar/home-assistant-llm-reminders/commit/15476e09124c9a3724c3e3b104c74679b236acca))
+* push trigger on main and beta only ([780cded](https://github.com/klonwar/home-assistant-llm-reminders/commit/780cdede9f8946de591c42b35fb2e3fbc30bc14c))
+
 ## [0.4.2](https://github.com/klonwar/home-assistant-llm-reminders/compare/v0.4.1...v0.4.2) (2026-08-14)
 
 
