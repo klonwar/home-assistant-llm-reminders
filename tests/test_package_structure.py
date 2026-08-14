@@ -67,3 +67,21 @@ def test_beta_release_please_config_uses_prerelease_strategy() -> None:
         extra_file["path"]: extra_file["jsonpath"]
         for extra_file in package_config["extra-files"]
     } == {"custom_components/llm_reminders/manifest.json": "$.version"}
+
+
+def test_validation_skips_release_please_technical_branches() -> None:
+    """Keep generated Release Please branches out of repository validation."""
+    workflow = (ROOT / ".github" / "workflows" / "validate.yml").read_text(
+        encoding="utf-8"
+    )
+
+    for branch in (
+        "release-please--branches--main",
+        "release-please--branches--beta",
+    ):
+        assert workflow.count(f"github.ref_name == '{branch}'") == 2
+        assert workflow.count(f"github.head_ref == '{branch}'") == 2
+
+    assert workflow.count("github.event_name == 'push'") == 2
+    assert workflow.count("github.event_name == 'pull_request'") == 2
+    assert workflow.count("${{ !(") == 2

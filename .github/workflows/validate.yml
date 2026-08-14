@@ -12,6 +12,15 @@ permissions: {}
 jobs:
   validate-hacs:
     name: HACS validation
+    if: >-
+      ${{ !(
+        (github.event_name == 'push' &&
+          (github.ref_name == 'release-please--branches--main' ||
+            github.ref_name == 'release-please--branches--beta')) ||
+        (github.event_name == 'pull_request' &&
+          (github.head_ref == 'release-please--branches--main' ||
+            github.head_ref == 'release-please--branches--beta'))
+      ) }}
     runs-on: ubuntu-latest
     steps:
       - name: HACS validation
@@ -21,6 +30,15 @@ jobs:
 
   validate-hassfest:
     name: Hassfest validation
+    if: >-
+      ${{ !(
+        (github.event_name == 'push' &&
+          (github.ref_name == 'release-please--branches--main' ||
+            github.ref_name == 'release-please--branches--beta')) ||
+        (github.event_name == 'pull_request' &&
+          (github.head_ref == 'release-please--branches--main' ||
+            github.head_ref == 'release-please--branches--beta'))
+      ) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
