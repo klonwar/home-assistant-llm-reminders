@@ -6,7 +6,7 @@
   recommendations.
 - Add `.github/workflows/validate.yml` with the official HACS Action for the
   `integration` category and the official Hassfest action.
-- Run validation on pushes, pull requests, a daily schedule, and manual
+- Run validation on pushes to `main` and `beta`, pull requests, and manual
   dispatch.
 - Add a separate Release Please workflow triggered by pushes to `main`.
 - Use the standard Release PR lifecycle: Release Please opens or updates a PR;
@@ -47,10 +47,10 @@
 
 ## Final design
 
-`validate.yml` is read-only and triggers on pushes, pull requests, a daily
-schedule, and `workflow_dispatch`. Its HACS job uses `hacs/action@main` with
-`category: integration`; its Hassfest job checks out the repository and uses
-`home-assistant/actions/hassfest@master`.
+`validate.yml` is read-only and triggers on pushes to `main` and `beta`, pull
+requests, and `workflow_dispatch`. Its HACS job uses
+`hacs/action@main` with `category: integration`; its Hassfest job checks out
+the repository and uses `home-assistant/actions/hassfest@master`.
 
 `release-please.yml` triggers only on pushes to `main`, uses
 `googleapis/release-please-action@v4`, passes `secrets.RELEASE_PLEASE_TOKEN`,
@@ -58,10 +58,12 @@ and declares only the required write permissions. A single concurrency group
 prevents overlapping Release PR updates. The workflow does not execute
 integration code or publish external packages.
 
-`release-please-config.json` defines one root package with the simple release
-strategy, root `CHANGELOG.md`, and the JSON `extra-files` updater. The action
-runs in manifest mode, creates ordinary `v<version>` tags, and generates the
-GitHub Release when the Release PR is merged.
+`release-please-config.json` defines one root package with the prerelease
+strategy disabled for stable releases, root `CHANGELOG.md`, and the JSON
+`extra-files` updater. The beta workflow uses the same strategy with
+prereleases enabled. A PR from `beta` to `main` therefore lets the stable
+workflow convert the latest beta version into a normal `v<version>` release
+without manual manifest edits.
 
 Validation consists of `python -m pytest tests`,
 `python -m compileall -q custom_components\\llm_reminders`, JSON parsing for
