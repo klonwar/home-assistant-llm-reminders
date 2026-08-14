@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/klonwar/home-assistant-llm-reminders/compare/v0.4.2...v0.5.0) (2026-08-14)
+
+
+### Features
+
+* conversation router ([#11](https://github.com/klonwar/home-assistant-llm-reminders/issues/11)) ([59f44d8](https://github.com/klonwar/home-assistant-llm-reminders/commit/59f44d8302fa2d6b8ea9c4921da17ea6d5a868b0))
+
 ## [0.4.2](https://github.com/klonwar/home-assistant-llm-reminders/compare/v0.4.1...v0.4.2) (2026-08-14)
 
 
