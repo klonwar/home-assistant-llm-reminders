@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2-beta.1](https://github.com/klonwar/home-assistant-llm-reminders/compare/v0.4.2-beta...v0.4.2-beta.1) (2026-08-14)
+
+
+### Bug Fixes
+
+* conversation router ([#7](https://github.com/klonwar/home-assistant-llm-reminders/issues/7)) ([7e82b83](https://github.com/klonwar/home-assistant-llm-reminders/commit/7e82b8305432438981b4abb8378e9d71134b47e8))
+
 ## [0.4.2-beta](https://github.com/klonwar/home-assistant-llm-reminders/compare/v0.4.1...v0.4.2-beta) (2026-08-14)
 
 
