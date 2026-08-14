@@ -50,3 +50,20 @@ def test_release_please_manifest_tracks_integration_version() -> None:
         extra_file["path"]: extra_file["jsonpath"]
         for extra_file in package_config["extra-files"]
     } == {"custom_components/llm_reminders/manifest.json": "$.version"}
+
+
+def test_beta_release_please_config_uses_prerelease_strategy() -> None:
+    """Keep the beta workflow isolated from the stable release strategy."""
+    beta_config = json.loads(
+        (ROOT / "release-please-config.beta.json").read_text(encoding="utf-8")
+    )
+
+    assert beta_config["versioning"] == "prerelease"
+    assert beta_config["prerelease-type"] == "beta"
+    assert beta_config["prerelease"] is True
+    package_config = beta_config["packages"]["."]
+    assert package_config["changelog-path"] == "CHANGELOG.md"
+    assert {
+        extra_file["path"]: extra_file["jsonpath"]
+        for extra_file in package_config["extra-files"]
+    } == {"custom_components/llm_reminders/manifest.json": "$.version"}

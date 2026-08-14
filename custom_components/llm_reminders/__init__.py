@@ -7,6 +7,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN, PROMPT_DATA_KEY
+from .conversation_router import (
+    register_conversation_router,
+    unregister_conversation_router,
+)
 from .llm_diagnostics import async_log_runtime_layout
 from .manager import ReminderManager
 from .prompt_loader import PromptCatalog, load_prompt_catalog
@@ -64,6 +68,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise
     managers = hass.data.setdefault(DOMAIN, {})
     managers[entry.entry_id] = manager
+    try:
+        register_conversation_router(hass)
+    except Exception:
+        managers.pop(entry.entry_id, None)
+        await manager.async_stop()
+        _LOGGER.exception(
+            "LLM Reminders conversation router startup failed: entry_id=%s",
+            entry.entry_id,
+        )
+        raise
     _LOGGER.debug(
         "LLM Reminders manager registered: hass.data[%s] entry_ids=%s "
         "manager_type=%s",
@@ -80,13 +94,18 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "async_unload_entry called for LLM Reminders: entry_id=%s",
         entry.entry_id,
     )
-    manager: ReminderManager | None = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+    managers = hass.data.get(DOMAIN, {})
+    manager: ReminderManager | None = managers.pop(entry.entry_id, None)
     if manager is None:
+        if not managers:
+            unregister_conversation_router(hass)
         _LOGGER.warning(
             "LLM Reminders unload requested, but no manager was registered: entry_id=%s",
             entry.entry_id,
         )
         return True
+    if not hass.data.get(DOMAIN):
+        unregister_conversation_router(hass)
     await manager.async_stop()
     _LOGGER.info(
         "LLM Reminders manager unloaded: entry_id=%s",
