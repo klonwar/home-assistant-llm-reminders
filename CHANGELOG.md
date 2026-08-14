@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2-beta.2](https://github.com/klonwar/home-assistant-llm-reminders/compare/v0.4.2-beta.1...v0.4.2-beta.2) (2026-08-14)
+
+
+### Bug Fixes
+
+* disable validation in release please ([3ff21ef](https://github.com/klonwar/home-assistant-llm-reminders/commit/3ff21ef106af1778041434ca1e9117d73daff516))
+
 ## [0.4.2-beta.1](https://github.com/klonwar/home-assistant-llm-reminders/compare/v0.4.2-beta...v0.4.2-beta.1) (2026-08-14)
 
 
