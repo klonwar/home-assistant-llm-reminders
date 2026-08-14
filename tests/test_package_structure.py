@@ -44,6 +44,9 @@ def test_release_please_manifest_tracks_integration_version() -> None:
     )
 
     assert release_manifest["."] == integration_manifest["version"]
+    assert release_config["versioning"] == "prerelease"
+    assert release_config["prerelease-type"] == "beta"
+    assert release_config["prerelease"] is False
     package_config = release_config["packages"]["."]
     assert package_config["changelog-path"] == "CHANGELOG.md"
     assert {
@@ -98,5 +101,5 @@ def test_validation_pushes_only_stable_and_beta_branches() -> None:
 
     assert "  push:\n    branches:\n      - main\n      - beta\n" in workflow
     assert "  pull_request:\n" in workflow
-    assert "  schedule:\n" in workflow
+    assert "  schedule:\n" not in workflow
     assert "  workflow_dispatch:\n" in workflow

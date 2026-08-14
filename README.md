@@ -179,11 +179,12 @@ from `main`, merge the changes to test into it, and let the beta workflow create
 or update the release PR. Merging that PR publishes a GitHub prerelease such as
 `0.5.0-beta.0` and updates the integration manifest.
 
-The beta workflow does not change the stable `main` release flow. When the
-implementation is ready for a stable release, merge the implementation into
-`main` without carrying over the beta-only version bump; the regular Release
-Please workflow will then create the stable release PR. HACS users must enable
-pre-release updates for this repository to receive beta versions.
+When a beta is accepted, open and merge a regular PR from `beta` into `main`.
+The stable configuration uses the same prerelease versioning strategy with
+`prerelease: false`, so the stable Release Please workflow converts the latest
+version such as `0.5.0-beta.2` into `0.5.0` and creates the stable Release PR.
+Do not edit the manifest or remove beta release commits manually. HACS users
+must enable pre-release updates for this repository to receive beta versions.
 
 Do not edit the integration version manually in ordinary feature or fix PRs.
 Review the HACS and Hassfest checks before merging a Release PR.
