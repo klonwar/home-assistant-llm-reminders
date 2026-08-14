@@ -32,10 +32,12 @@ This integration provides reminder tools; it does not configure these services.
 
 ## How it works
 
-1. You speak to your Home Assistant conversation agent.
-2. The agent calls a reminder tool to create, list, update, or cancel a
+1. You speak to an Assist pipeline that uses an external conversation agent.
+2. Reminder phrases are intercepted before local intents and forwarded to the
+   selected pipeline agent with the original Assist device context.
+3. The agent calls a reminder tool to create, list, update, or cancel a
    reminder.
-3. The integration validates the request, stores the reminder, schedules it,
+4. The integration validates the request, stores the reminder, schedules it,
    and delivers the announcement.
 
 The four available LLM tools are `create_reminder`, `list_reminders`,
@@ -84,19 +86,25 @@ for platform details.
 Open **Settings → Devices & services → Add integration**, select **LLM
 Reminders**, and configure an optional default Assist Satellite.
 
-The default satellite is used when the LLM request has no device context. When
-the request includes a Home Assistant device ID, the integration first looks
-for an `assist_satellite` entity belonging to that device. This supports one or
-many satellites without hardcoding their names.
+For voice-routed reminder phrases, the request must include a Home Assistant
+device ID. The integration resolves the Assist Satellite belonging to that
+device and fails safely if the context is missing or no satellite is found; it
+does not redirect a voice reminder to `default_satellite`. Configure one Assist
+Satellite per Home Assistant device for deterministic delivery. The configured
+default satellite remains available to existing non-voice tool requests that
+do not carry device context.
 
 Configure your conversation agent separately (for example, the OpenRouter
 conversation integration) and enable Assist/home-control mode so it can receive
 Home Assistant LLM tools. After setup, verify tool calls in the Assist Debug
 dialog.
 
-The integration does not replace your conversation agent, speech-to-text, or
-text-to-speech provider, and it does not modify native Home Assistant/LVA timer
-intents.
+Reminder routing is guaranteed for external LLM conversation agents. A
+pipeline that uses only the built-in Home Assistant conversation agent keeps
+Home Assistant's native intent behavior because Assist Core does not run
+external sentence triggers for that pipeline. The integration does not replace
+your conversation agent, speech-to-text, or text-to-speech provider, and it
+does not modify native Home Assistant/LVA timer intents.
 
 ## Language support
 
@@ -162,6 +170,20 @@ Commit prefixes such as `fix:` for patch releases, `feat:` for minor releases,
 and a `!` suffix for breaking changes. Release Please opens or updates a
 Release PR, updates `manifest.json` and `CHANGELOG.md`, and publishes the
 GitHub Release after that PR is merged.
+
+#### Beta releases
+
+Beta releases use a separate `beta` branch and the
+`release-please-config.beta.json` prerelease configuration. Create the branch
+from `main`, merge the changes to test into it, and let the beta workflow create
+or update the release PR. Merging that PR publishes a GitHub prerelease such as
+`0.5.0-beta.0` and updates the integration manifest.
+
+The beta workflow does not change the stable `main` release flow. When the
+implementation is ready for a stable release, merge the implementation into
+`main` without carrying over the beta-only version bump; the regular Release
+Please workflow will then create the stable release PR. HACS users must enable
+pre-release updates for this repository to receive beta versions.
 
 Do not edit the integration version manually in ordinary feature or fix PRs.
 Review the HACS and Hassfest checks before merging a Release PR.
